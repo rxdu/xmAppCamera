@@ -4,10 +4,10 @@ Tracks WHAT, not HOW. Status: `[ ]` todo · `[~]` in progress · `[x]` done. See
 
 ## Phase 0 — Skeleton
 - [x] Git repo + submodules: quickviz `68b79c4`, xmSigma `d65e418`, googletest `973323e` under `third_party/`
-- [ ] CMake project: C++17, `namespace xmotion`, `add_subdirectory` submodules (find_package fallback), find GStreamer / yaml-cpp; assert OpenCV is NOT linked
-- [ ] `.clang-format` (Google, SortIncludes: Never), GoogleTest wiring via submodule
-- [ ] `core/` value types: `PixelFormat`, `VideoFrame`, `SourceDescriptor`, `SourceCaps`, `SourceStats`, `Result` (+ unit tests)
-- [ ] App shell: `Viewer` + docking, empty DevicePanel + PreviewPanel + Stats/LogPanel, XLOG wired
+- [x] CMake project: C++17, `namespace xmotion`, `add_subdirectory` submodules (find_package fallback), find GStreamer / yaml-cpp; assert OpenCV is NOT linked
+- [x] `.clang-format` (Google, SortIncludes: Never), GoogleTest wiring via submodule
+- [x] `core/` value types: `PixelFormat`, `VideoFrame`, `SourceDescriptor`, `SourceCaps`, `SourceStats`, `Result` (+ unit tests)
+- [~] App shell: `Viewer` + docking, empty DevicePanel + PreviewPanel + Stats/LogPanel, XLOG wired
 
 ## Phase 1 — USB preview
 - [ ] `VideoSource` interface + `DataStream<VideoFrame>` handoff

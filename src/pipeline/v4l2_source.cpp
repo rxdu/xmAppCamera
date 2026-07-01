@@ -1,0 +1,376 @@
+/*
+ * @file v4l2_source.cpp
+ * Copyright (c) 2026 Ruixiang Du (rdu)
+ */
+#include "xmcam/pipeline/v4l2_source.hpp"
+
+#include <dirent.h>
+#include <fcntl.h>
+#include <linux/videodev2.h>
+#include <poll.h>
+#include <sys/mman.h>
+#include <unistd.h>
+
+#include <algorithm>
+#include <cerrno>
+#include <cstdlib>
+#include <cstring>
+
+#include "xmcam/core/util/scope_timer.hpp"
+#include "xmsigma/logging/xlogger.hpp"
+
+namespace xmotion {
+namespace {
+
+constexpr unsigned kBufferCount = 4;
+
+int64_t TimevalToNs(const timeval& tv) {
+  return static_cast<int64_t>(tv.tv_sec) * 1000000000LL +
+         static_cast<int64_t>(tv.tv_usec) * 1000LL;
+}
+
+// List /dev/video* device node paths (sorted).
+std::vector<std::string> ListVideoNodes() {
+  std::vector<std::string> nodes;
+  DIR* d = ::opendir("/dev");
+  if (!d) return nodes;
+  for (dirent* e = ::readdir(d); e; e = ::readdir(d)) {
+    if (std::strncmp(e->d_name, "video", 5) == 0)
+      nodes.push_back(std::string("/dev/") + e->d_name);
+  }
+  ::closedir(d);
+  std::sort(nodes.begin(), nodes.end());
+  return nodes;
+}
+
+// Map a /dev/videoN to its stable /dev/v4l/by-id/... symlink, if any.
+std::string ResolveByIdPath(const std::string& node) {
+  const char* dir = "/dev/v4l/by-id";
+  DIR* d = ::opendir(dir);
+  if (!d) return {};
+  std::string result;
+  char target[PATH_MAX];
+  for (dirent* e = ::readdir(d); e; e = ::readdir(d)) {
+    if (e->d_name[0] == '.') continue;
+    std::string link = std::string(dir) + "/" + e->d_name;
+    char resolved[PATH_MAX];
+    if (::realpath(link.c_str(), resolved) &&
+        node == resolved) {
+      result = link;
+      break;
+    }
+    (void)target;
+  }
+  ::closedir(d);
+  return result;
+}
+
+}  // namespace
+
+// ---------------------------------------------------------------------------
+// V4l2BufferPool
+// ---------------------------------------------------------------------------
+V4l2BufferPool::~V4l2BufferPool() {
+  // Stop streaming then unmap. By now no frame leases remain (they hold a
+  // shared_ptr to this pool), so unmapping is safe.
+  if (dev_ && dev_->IsOpen()) {
+    v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    dev_->Ioctl(VIDIOC_STREAMOFF, &type);
+  }
+  for (auto& s : slots_) {
+    if (s.start && s.start != MAP_FAILED) ::munmap(s.start, s.length);
+  }
+  XLOG_DEBUG("V4l2BufferPool destroyed ({} slots unmapped)", slots_.size());
+}
+
+void V4l2BufferPool::Requeue(unsigned index) {
+  if (!dev_ || !dev_->IsOpen()) return;
+  v4l2_buffer buf{};
+  buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  buf.memory = V4L2_MEMORY_MMAP;
+  buf.index = index;
+  // Errors here are expected after STREAMOFF; ignore.
+  dev_->Ioctl(VIDIOC_QBUF, &buf);
+}
+
+// ---------------------------------------------------------------------------
+// Enumeration / caps
+// ---------------------------------------------------------------------------
+Status V4l2Source::QueryCaps(const std::string& device, SourceCaps* out) {
+  V4l2Device dev;
+  Status st = dev.Open(device);
+  if (!st.ok()) return st;
+
+  v4l2_capability cap{};
+  if (dev.Ioctl(VIDIOC_QUERYCAP, &cap) != 0)
+    return Err(ErrorCode::kDeviceError, "QUERYCAP failed");
+  if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE))
+    return Err(ErrorCode::kUnsupported, "not a capture device");
+
+  v4l2_fmtdesc fmt{};
+  fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  for (fmt.index = 0; dev.Ioctl(VIDIOC_ENUM_FMT, &fmt) == 0; ++fmt.index) {
+    PixelFormat pf = FromV4l2Fourcc(fmt.pixelformat);
+    bool compressed = (fmt.flags & V4L2_FMT_FLAG_COMPRESSED) != 0;
+    FormatDesc& fd = out->AddFormat(
+        pf, fmt.pixelformat,
+        reinterpret_cast<const char*>(fmt.description), compressed);
+
+    v4l2_frmsizeenum fs{};
+    fs.pixel_format = fmt.pixelformat;
+    for (fs.index = 0; dev.Ioctl(VIDIOC_ENUM_FRAMESIZES, &fs) == 0; ++fs.index) {
+      if (fs.type != V4L2_FRMSIZE_TYPE_DISCRETE) break;
+      FrameSize sz;
+      sz.width = fs.discrete.width;
+      sz.height = fs.discrete.height;
+
+      v4l2_frmivalenum fi{};
+      fi.pixel_format = fmt.pixelformat;
+      fi.width = fs.discrete.width;
+      fi.height = fs.discrete.height;
+      for (fi.index = 0;
+           dev.Ioctl(VIDIOC_ENUM_FRAMEINTERVALS, &fi) == 0; ++fi.index) {
+        if (fi.type != V4L2_FRMIVAL_TYPE_DISCRETE) break;
+        if (fi.discrete.numerator)
+          sz.fps.push_back(static_cast<double>(fi.discrete.denominator) /
+                           fi.discrete.numerator);
+      }
+      fd.sizes.push_back(std::move(sz));
+    }
+  }
+  return Ok();
+}
+
+std::vector<DeviceInfo> V4l2Source::Enumerate() {
+  std::vector<DeviceInfo> result;
+  for (const auto& node : ListVideoNodes()) {
+    V4l2Device dev;
+    if (!dev.Open(node).ok()) continue;
+    v4l2_capability cap{};
+    if (dev.Ioctl(VIDIOC_QUERYCAP, &cap) != 0) continue;
+    if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE)) continue;
+
+    DeviceInfo info;
+    info.device = node;
+    info.card = reinterpret_cast<const char*>(cap.card);
+    info.bus = reinterpret_cast<const char*>(cap.bus_info);
+    dev.Close();
+
+    // Filter out capture nodes that expose no pixel formats (e.g. the UVC
+    // metadata node) — they cannot produce frames.
+    SourceCaps caps;
+    if (!QueryCaps(node, &caps).ok() || caps.empty()) {
+      XLOG_DEBUG("V4l2 skip {} (no capture formats)", node);
+      continue;
+    }
+    info.caps = std::move(caps);
+    info.by_id = ResolveByIdPath(node);
+    XLOG_INFO("V4l2 device: {} [{}] formats={}", info.device, info.card,
+              info.caps.formats.size());
+    result.push_back(std::move(info));
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Lifecycle
+// ---------------------------------------------------------------------------
+V4l2Source::~V4l2Source() { Close(); }
+
+Status V4l2Source::Open(const SourceDescriptor& desc) {
+  Close();
+  desc_ = desc;
+  dev_ = std::make_shared<V4l2Device>();
+  Status st = dev_->Open(desc.device);
+  if (!st.ok()) return st;
+
+  caps_ = SourceCaps{};
+  st = QueryCaps(desc.device, &caps_);
+  if (!st.ok()) return st;
+
+  return NegotiateFormat();
+}
+
+Status V4l2Source::NegotiateFormat() {
+  // Choose a raw format for now (MJPEG decode branch wired in Phase 1.5).
+  PixelFormat want = desc_.format;
+  int w = desc_.width, h = desc_.height;
+  double fps = desc_.fps;
+
+  if (want == PixelFormat::kUnknown || IsCompressed(want)) {
+    // Default to the first non-compressed format we support.
+    for (const auto& f : caps_.formats) {
+      if (!f.compressed && ToV4l2Fourcc(f.format) != 0) {
+        want = f.format;
+        break;
+      }
+    }
+  }
+  if (want == PixelFormat::kUnknown)
+    return Err(ErrorCode::kUnsupported, "no raw format available");
+  if (w == 0 || h == 0) {
+    w = 640;
+    h = 480;
+  }
+
+  v4l2_format fmt{};
+  fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  fmt.fmt.pix.width = w;
+  fmt.fmt.pix.height = h;
+  fmt.fmt.pix.pixelformat = ToV4l2Fourcc(want);
+  fmt.fmt.pix.field = V4L2_FIELD_ANY;
+  if (dev_->Ioctl(VIDIOC_S_FMT, &fmt) != 0)
+    return Err(ErrorCode::kDeviceError,
+               std::string("S_FMT: ") + std::strerror(errno));
+
+  neg_format_ = FromV4l2Fourcc(fmt.fmt.pix.pixelformat);
+  neg_w_ = fmt.fmt.pix.width;
+  neg_h_ = fmt.fmt.pix.height;
+  neg_stride_ = fmt.fmt.pix.bytesperline;
+
+  if (fps > 0.0) {
+    v4l2_streamparm parm{};
+    parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    parm.parm.capture.timeperframe.numerator = 1;
+    parm.parm.capture.timeperframe.denominator = static_cast<uint32_t>(fps);
+    dev_->Ioctl(VIDIOC_S_PARM, &parm);  // best-effort
+  }
+
+  XLOG_INFO("V4l2 negotiated {} {}x{} stride={}", ToString(neg_format_), neg_w_,
+            neg_h_, neg_stride_);
+  return Ok();
+}
+
+Status V4l2Source::SetupBuffers(unsigned count) {
+  v4l2_requestbuffers req{};
+  req.count = count;
+  req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  req.memory = V4L2_MEMORY_MMAP;
+  if (dev_->Ioctl(VIDIOC_REQBUFS, &req) != 0)
+    return Err(ErrorCode::kDeviceError, "REQBUFS failed");
+  if (req.count < 2)
+    return Err(ErrorCode::kDeviceError, "insufficient buffer memory");
+
+  std::vector<V4l2BufferPool::Slot> slots(req.count);
+  for (unsigned i = 0; i < req.count; ++i) {
+    v4l2_buffer buf{};
+    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    buf.memory = V4L2_MEMORY_MMAP;
+    buf.index = i;
+    if (dev_->Ioctl(VIDIOC_QUERYBUF, &buf) != 0)
+      return Err(ErrorCode::kDeviceError, "QUERYBUF failed");
+    void* p = ::mmap(nullptr, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED,
+                     dev_->fd(), buf.m.offset);
+    if (p == MAP_FAILED)
+      return Err(ErrorCode::kIo, "mmap failed");
+    slots[i].start = p;
+    slots[i].length = buf.length;
+  }
+
+  pool_ = std::make_shared<V4l2BufferPool>(dev_, std::move(slots));
+
+  // Queue all buffers, then start streaming.
+  for (unsigned i = 0; i < req.count; ++i) pool_->Requeue(i);
+  v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  if (dev_->Ioctl(VIDIOC_STREAMON, &type) != 0)
+    return Err(ErrorCode::kDeviceError, "STREAMON failed");
+  return Ok();
+}
+
+Status V4l2Source::Start() {
+  if (running_.load()) return Ok();
+  if (!dev_ || !dev_->IsOpen())
+    return Err(ErrorCode::kInternal, "Start() before Open()");
+  if (IsCompressed(neg_format_))
+    return Err(ErrorCode::kUnsupported,
+               "compressed capture needs the GStreamer decode branch");
+
+  Status st = SetupBuffers(kBufferCount);
+  if (!st.ok()) return st;
+
+  running_.store(true);
+  seq_ = 0;
+  capture_rate_.Reset();
+  thread_ = std::thread(&V4l2Source::CaptureLoop, this);
+  XLOG_INFO("V4l2Source started ({} {}x{})", ToString(neg_format_), neg_w_,
+            neg_h_);
+  return Ok();
+}
+
+void V4l2Source::CaptureLoop() {
+  while (running_.load()) {
+    pollfd pfd{dev_->fd(), POLLIN, 0};
+    int pr = ::poll(&pfd, 1, 1000);
+    if (pr < 0) {
+      if (errno == EINTR) continue;
+      XLOG_ERROR("V4l2 poll error: {}", std::strerror(errno));
+      break;
+    }
+    if (pr == 0) {
+      XLOG_WARN("V4l2 capture timeout (no frame in 1s)");
+      continue;
+    }
+
+    v4l2_buffer buf{};
+    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    buf.memory = V4L2_MEMORY_MMAP;
+    if (dev_->Ioctl(VIDIOC_DQBUF, &buf) != 0) {
+      if (errno == EAGAIN) continue;
+      XLOG_ERROR("V4l2 DQBUF error: {}", std::strerror(errno));
+      break;
+    }
+
+    // Wrap the mmap slot in a VideoFrame; the lease re-queues the slot when the
+    // last frame copy is released (by the render thread or DataStream overwrite).
+    auto pool = pool_;
+    const unsigned index = buf.index;
+    struct FrameLease {
+      std::shared_ptr<V4l2BufferPool> pool;
+      unsigned index;
+      ~FrameLease() { pool->Requeue(index); }
+    };
+    auto lease = std::make_shared<FrameLease>(FrameLease{pool, index});
+
+    VideoFrame f;
+    f.width = neg_w_;
+    f.height = neg_h_;
+    f.format = neg_format_;
+    f.stride = neg_stride_;
+    f.data = static_cast<const uint8_t*>(pool->slot(index).start);
+    f.pts_ns = TimevalToNs(buf.timestamp);
+    f.seq = seq_++;
+    f.owner = lease;
+
+    const double fps = capture_rate_.Tick();
+    {
+      std::lock_guard<std::mutex> lk(stats_mtx_);
+      stats_.capture_fps = fps;
+      stats_.frames = capture_rate_.count();
+      stats_.decoder = "raw";
+    }
+    frames_.Push(std::move(f));
+  }
+}
+
+void V4l2Source::Stop() {
+  if (!running_.exchange(false)) return;
+  if (thread_.joinable()) thread_.join();
+  // Release our pool reference; STREAMOFF/munmap happen in the pool destructor
+  // once all outstanding frame leases are released.
+  pool_.reset();
+  XLOG_INFO("V4l2Source stopped ({} frames)", seq_);
+}
+
+void V4l2Source::Close() {
+  Stop();
+  dev_.reset();  // fd closes when the last (pool) reference drops
+  caps_ = SourceCaps{};
+  neg_format_ = PixelFormat::kUnknown;
+}
+
+SourceStats V4l2Source::GetStats() const {
+  std::lock_guard<std::mutex> lk(stats_mtx_);
+  return stats_;
+}
+
+}  // namespace xmotion

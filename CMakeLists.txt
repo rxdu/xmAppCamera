@@ -62,6 +62,7 @@ if(XMCAM_BUILD_GUI AND NOT TARGET quickviz)
 endif()
 
 add_subdirectory(src)
+add_subdirectory(tools)
 if(XMCAM_BUILD_TESTS)
   add_subdirectory(test)
 endif()

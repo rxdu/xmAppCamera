@@ -1,0 +1,4 @@
+add_executable(test_pipeline
+  test_v4l2_enumerate.cpp)
+target_link_libraries(test_pipeline PRIVATE xmcam_pipeline gtest gtest_main)
+gtest_discover_tests(test_pipeline)

@@ -2,6 +2,8 @@
 
 Tracks WHAT, not HOW. Status: `[ ]` todo · `[~]` in progress · `[x]` done. See `docs/DESIGN.md` §11 for phase milestones.
 
+**Status (2026-07-02):** Phases 0–3 backend + GUI implemented; CI green (build + 22 tests). Hardware-verified on the Global Shutter Camera: YUYV raw capture, MJPEG→RGBA decode @~60fps, 20-control introspection + INACTIVE-flag dependency, live RTP/H264-over-UDP. GUI compiles in CI; **awaiting manual/visual testing** (layout, live preview, control tuning). Remaining: Phase 4 perf (GPU YUV shader, GlMem zero-copy, full StatsPanel) and Phase 5 RTSP export.
+
 ## Phase 0 — Skeleton
 - [x] Git repo + submodules: quickviz `68b79c4`, xmSigma `d65e418`, googletest `973323e` under `third_party/`
 - [x] CMake project: C++17, `namespace xmotion`, `add_subdirectory` submodules (find_package fallback), find GStreamer / yaml-cpp; assert OpenCV is NOT linked

@@ -1,0 +1,2 @@
+add_executable(xmcam_control_probe control_probe.cpp)
+target_link_libraries(xmcam_control_probe PRIVATE xmcam_control)

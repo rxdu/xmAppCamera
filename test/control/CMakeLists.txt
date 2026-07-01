@@ -1,0 +1,4 @@
+add_executable(test_control
+  test_control_introspect.cpp)
+target_link_libraries(test_control PRIVATE xmcam_control gtest gtest_main)
+gtest_discover_tests(test_control)

@@ -9,6 +9,8 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
 endif()
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
 option(XMCAM_BUILD_GUI "Build the GUI (needs quickviz/GLFW/GLM/Cairo)" ON)
 option(XMCAM_WITH_GSTREAMER "Enable GStreamer sources + MJPEG decode" ON)
 option(XMCAM_BUILD_TESTS "Build unit tests" ON)

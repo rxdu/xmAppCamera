@@ -64,7 +64,7 @@ std::string ConfigWriter::ToYamlString(const CameraConfig& cfg) {
   // --- controls ---
   out << YAML::Key << "controls" << YAML::Value << YAML::BeginSeq;
   for (const auto& c : cfg.controls) {
-    out << YAML::BeginMap << YAML::Flow;
+    out << YAML::Flow << YAML::BeginMap;
     out << YAML::Key << "name" << YAML::Value << c.name;
     out << YAML::Key << "id" << YAML::Value << FormatControlId(c.id);
     out << YAML::Key << "value" << YAML::Value << c.value;

@@ -1,3 +1,5 @@
 include(GoogleTest)
 add_subdirectory(core)
 add_subdirectory(pipeline)
+add_subdirectory(control)
+add_subdirectory(export)

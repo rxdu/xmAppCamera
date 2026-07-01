@@ -9,6 +9,7 @@
  */
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <thread>
 
 #include "xmcam/pipeline/v4l2_source.hpp"
@@ -32,16 +33,21 @@ int main(int argc, char** argv) {
     return 0;
   }
 
+  // args: [device] [yuyv|mjpeg] [WxH] [fps] [nframes]
   std::string device = argc > 1 ? argv[1] : devices.front().device;
-  int n = argc > 2 ? std::atoi(argv[2]) : 60;
+  std::string fmt = argc > 2 ? argv[2] : "yuyv";
+  int w = 640, h = 480;
+  if (argc > 3) std::sscanf(argv[3], "%dx%d", &w, &h);
+  double fps = argc > 4 ? std::atof(argv[4]) : 30;
+  int n = argc > 5 ? std::atoi(argv[5]) : 60;
 
   SourceDescriptor desc;
   desc.type = SourceDescriptor::Type::kV4l2;
   desc.device = device;
-  desc.format = PixelFormat::kYuyv;  // raw first-light path
-  desc.width = 640;
-  desc.height = 480;
-  desc.fps = 30;
+  desc.format = (fmt == "mjpeg") ? PixelFormat::kMjpeg : PixelFormat::kYuyv;
+  desc.width = w;
+  desc.height = h;
+  desc.fps = fps;
 
   V4l2Source src;
   if (auto st = src.Open(desc); !st.ok()) {

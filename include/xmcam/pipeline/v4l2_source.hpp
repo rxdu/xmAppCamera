@@ -22,6 +22,10 @@
 
 namespace xmotion {
 
+#ifdef XMCAM_WITH_GSTREAMER
+class GstJpegDecoder;  // fwd (MJPEG decode branch)
+#endif
+
 // Owns the mmap regions + streaming lifecycle. Held by a shared_ptr so it
 // outlives V4l2Source::Close() until every in-flight frame lease releases;
 // munmap/STREAMOFF happen only in the destructor. This is what makes the
@@ -53,7 +57,7 @@ class V4l2Source : public VideoSource {
   // Query capabilities of a single device node.
   static Status QueryCaps(const std::string& device, SourceCaps* out);
 
-  V4l2Source() = default;
+  V4l2Source();  // out-of-line (unique_ptr to incomplete GstJpegDecoder)
   ~V4l2Source() override;
 
   Status Open(const SourceDescriptor& desc) override;
@@ -82,6 +86,9 @@ class V4l2Source : public VideoSource {
   DataStream<VideoFrame> frames_;
 
   std::shared_ptr<V4l2BufferPool> pool_;
+#ifdef XMCAM_WITH_GSTREAMER
+  std::unique_ptr<GstJpegDecoder> jpeg_decoder_;  // MJPEG branch
+#endif
   std::thread thread_;
   std::atomic<bool> running_{false};
 

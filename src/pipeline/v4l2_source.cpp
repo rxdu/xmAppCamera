@@ -19,6 +19,10 @@
 #include "xmcam/core/util/scope_timer.hpp"
 #include "xmsigma/logging/xlogger.hpp"
 
+#ifdef XMCAM_WITH_GSTREAMER
+#include "xmcam/pipeline/gst_jpeg_decoder.hpp"
+#endif
+
 namespace xmotion {
 namespace {
 
@@ -175,6 +179,7 @@ std::vector<DeviceInfo> V4l2Source::Enumerate() {
 // ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
+V4l2Source::V4l2Source() = default;
 V4l2Source::~V4l2Source() { Close(); }
 
 Status V4l2Source::Open(const SourceDescriptor& desc) {
@@ -197,8 +202,10 @@ Status V4l2Source::NegotiateFormat() {
   int w = desc_.width, h = desc_.height;
   double fps = desc_.fps;
 
-  if (want == PixelFormat::kUnknown || IsCompressed(want)) {
-    // Default to the first non-compressed format we support.
+  if (want == PixelFormat::kUnknown) {
+    // Unspecified: default to the first non-compressed format we support (the
+    // zero-decode path). Callers may explicitly request MJPEG, which is routed
+    // through the GStreamer decode branch in Start().
     for (const auto& f : caps_.formats) {
       if (!f.compressed && ToV4l2Fourcc(f.format) != 0) {
         want = f.format;
@@ -281,9 +288,18 @@ Status V4l2Source::Start() {
   if (running_.load()) return Ok();
   if (!dev_ || !dev_->IsOpen())
     return Err(ErrorCode::kInternal, "Start() before Open()");
-  if (IsCompressed(neg_format_))
+  if (IsCompressed(neg_format_)) {
+#ifdef XMCAM_WITH_GSTREAMER
+    if (neg_format_ != PixelFormat::kMjpeg)
+      return Err(ErrorCode::kUnsupported, "only MJPEG compressed capture");
+    jpeg_decoder_ = std::make_unique<GstJpegDecoder>();
+    if (auto ds = jpeg_decoder_->Open(); !ds.ok()) return ds;
+    XLOG_INFO("V4l2Source MJPEG decode branch enabled");
+#else
     return Err(ErrorCode::kUnsupported,
                "compressed capture needs the GStreamer decode branch");
+#endif
+  }
 
   Status st = SetupBuffers(kBufferCount);
   if (!st.ok()) return st;
@@ -319,6 +335,39 @@ void V4l2Source::CaptureLoop() {
       XLOG_ERROR("V4l2 DQBUF error: {}", std::strerror(errno));
       break;
     }
+
+#ifdef XMCAM_WITH_GSTREAMER
+    // MJPEG branch: decode into a fresh RGBA frame, then requeue the JPEG slot
+    // immediately (the decoder copied the bytes, so the slot is free to reuse).
+    if (jpeg_decoder_) {
+      VideoFrame decoded;
+      const uint8_t* jpeg =
+          static_cast<const uint8_t*>(pool_->slot(buf.index).start);
+      double decode_ms = 0.0;
+      Status ds;
+      {
+        ScopeTimer t("mjpeg_decode", &decode_ms);
+        ds = jpeg_decoder_->Decode(jpeg, buf.bytesused,
+                                   TimevalToNs(buf.timestamp), seq_, &decoded);
+      }
+      pool_->Requeue(buf.index);
+      if (ds.ok()) {
+        decoded.seq = seq_++;
+        const double fps = capture_rate_.Tick();
+        {
+          std::lock_guard<std::mutex> lk(stats_mtx_);
+          stats_.capture_fps = fps;
+          stats_.frames = capture_rate_.count();
+          stats_.decode_ms = decode_ms;
+          stats_.decoder = "mjpeg->rgba";
+        }
+        frames_.Push(std::move(decoded));
+      } else {
+        XLOG_WARN("MJPEG decode failed: {}", ds.message());
+      }
+      continue;
+    }
+#endif
 
     // Wrap the mmap slot in a VideoFrame; the lease re-queues the slot when the
     // last frame copy is released (by the render thread or DataStream overwrite).
@@ -358,6 +407,9 @@ void V4l2Source::Stop() {
   // Release our pool reference; STREAMOFF/munmap happen in the pool destructor
   // once all outstanding frame leases are released.
   pool_.reset();
+#ifdef XMCAM_WITH_GSTREAMER
+  jpeg_decoder_.reset();
+#endif
   XLOG_INFO("V4l2Source stopped ({} frames)", seq_);
 }
 

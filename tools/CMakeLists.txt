@@ -5,3 +5,5 @@ if(XMCAM_WITH_GSTREAMER)
   add_executable(xmcam_gst_smoke gst_stream_smoke.cpp)
   target_link_libraries(xmcam_gst_smoke PRIVATE xmcam_pipeline)
 endif()
+
+add_subdirectory(control)

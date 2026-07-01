@@ -1,0 +1,6 @@
+# Google style, matching the xmotion family. Includes kept in author order.
+BasedOnStyle: Google
+SortIncludes: Never
+ColumnLimit: 80
+DerivePointerAlignment: false
+PointerAlignment: Left

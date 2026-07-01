@@ -60,6 +60,8 @@ if(XMCAM_BUILD_GUI)
   endif()
 endif()
 if(XMCAM_BUILD_GUI AND NOT TARGET quickviz)
+  # Keep quickviz on C++17 (its Yoga auto-layout would force C++20).
+  set(ENABLE_AUTO_LAYOUT OFF CACHE BOOL "" FORCE)
   add_subdirectory(third_party/quickviz EXCLUDE_FROM_ALL)
 endif()
 

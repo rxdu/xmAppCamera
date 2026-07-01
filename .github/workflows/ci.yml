@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config \
+            libgl1-mesa-dev libglu1-mesa-dev libglfw3-dev libglm-dev libcairo2-dev \
+            libeigen3-dev libspdlog-dev libfmt-dev libyaml-cpp-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-bad gstreamer1.0-libav
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DXMCAM_BUILD_GUI=ON -DXMCAM_BUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure
+
+      - name: Verify OpenCV is not linked into the app
+        run: |
+          if ldd build/bin/xmAppCamera 2>/dev/null | grep -i opencv; then
+            echo "ERROR: OpenCV linked into xmAppCamera"; exit 1
+          fi
+          echo "OK: no OpenCV in xmAppCamera"

@@ -1,10 +1,10 @@
 [submodule "third_party/xmSigma"]
 	path = third_party/xmSigma
-	url = git@github.com:rxdu/xmSigma.git
+	url = https://github.com/rxdu/xmSigma.git
 	branch = main
 [submodule "third_party/quickviz"]
 	path = third_party/quickviz
-	url = git@github.com:rxdu/quickviz.git
+	url = https://github.com/rxdu/quickviz.git
 	branch = main
 [submodule "third_party/googletest"]
 	path = third_party/googletest

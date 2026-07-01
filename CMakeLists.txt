@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
 project(xmAppCamera VERSION 0.1.0 LANGUAGES C CXX)
 
-# C++20: quickviz's scene module requires ENABLE_AUTO_LAYOUT (Yoga), which needs
-# C++20. Our own code is C++17-clean but compiles fine as C++20.
-set(CMAKE_CXX_STANDARD 20)
+# C++17: xmSigma's spdlog logging wrapper is incompatible with C++20's
+# compile-time fmt format checking. We only use quickviz's `viewer` module
+# (not `scene`), so we don't need Yoga/C++20.
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -62,8 +63,10 @@ if(XMCAM_BUILD_GUI)
   endif()
 endif()
 if(XMCAM_BUILD_GUI AND NOT TARGET quickviz)
-  # quickviz's scene module needs Yoga auto-layout (C++20, set above).
-  set(ENABLE_AUTO_LAYOUT ON CACHE BOOL "" FORCE)
+  # We link only the `viewer` module (Panel/Viewer/ImGui/glad), which builds on
+  # C++17 without Yoga. Auto-layout OFF keeps the `scene` module (C++20-only)
+  # out of our dependency graph.
+  set(ENABLE_AUTO_LAYOUT OFF CACHE BOOL "" FORCE)
   add_subdirectory(third_party/quickviz EXCLUDE_FROM_ALL)
 endif()
 

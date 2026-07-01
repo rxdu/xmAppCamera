@@ -10,8 +10,9 @@ add_library(xmcam_ui
 target_include_directories(xmcam_ui PUBLIC
   $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
 
-# quickviz (INTERFACE) provides imgui/glad/viewer headers + GL; pipeline/control
-# provide the backend types the panels talk to.
-target_link_libraries(xmcam_ui PUBLIC xmcam_pipeline xmcam_control quickviz)
+# Link quickviz's `viewer` module only (Panel/Viewer/ImGui/glad/GL) — NOT the
+# `quickviz` aggregate, which drags in the C++20-only `scene` module we don't
+# use. pipeline/control provide the backend types the panels talk to.
+target_link_libraries(xmcam_ui PUBLIC xmcam_pipeline xmcam_control viewer)
 
 add_library(xmcam::ui ALIAS xmcam_ui)

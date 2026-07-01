@@ -1,0 +1,18 @@
+# Lessons
+
+Project-visible record of mistakes and their corrections. Consult during intake and after errors.
+
+### Must stay C++17 (xmSigma logging breaks under C++20)
+- **Pattern:** Bumping the project to C++20 (to satisfy quickviz's Yoga auto-layout) broke the build: `xmSigma/.../logger_vendor_spdlog.hpp: 'args#0' is not a constant expression`. spdlog 1.9 / fmt 8 enforce compile-time format-string checking under C++20, which xmSigma's runtime-format wrapper violates.
+- **Correction:** Keep the whole project on C++17. Do not raise `CMAKE_CXX_STANDARD` while depending on `xmotion::xmSigma`.
+- **Context:** CMake, xmSigma + spdlog/fmt, C++ standard selection.
+
+### Link quickviz `viewer`, not the `quickviz` aggregate
+- **Pattern:** Linking the `quickviz` INTERFACE target pulls in the `scene` module, whose `scene_app.cpp` unconditionally calls Yoga flex methods that only exist under `ENABLE_AUTO_LAYOUT` (C++20). With auto-layout OFF (needed for C++17) the scene module fails to compile.
+- **Correction:** Link only the specific quickviz targets used — `viewer` (Panel/Viewer/ImGui/glad/GL) — and set `ENABLE_AUTO_LAYOUT OFF`. `EXCLUDE_FROM_ALL` on the quickviz subdir then keeps `scene` out of the build graph.
+- **Context:** CMake, quickviz submodule, module-level linking.
+
+### CI: submodule URLs must be HTTPS; ubuntu-24.04 for GStreamer
+- **Pattern:** (1) SSH submodule URLs (`git@github.com:...`) fail in GitHub Actions (no SSH key). (2) `ubuntu-22.04` runners can't install `libgstreamer1.0-dev` — its `libunwind-dev` dep conflicts with the runner's preinstalled LLVM libunwind ("held broken packages").
+- **Correction:** Use HTTPS submodule URLs (public repos fetch tokenless). Run CI on `ubuntu-24.04`. Remember `libfontconfig1-dev` — quickviz `viewer` links Fontconfig.
+- **Context:** GitHub Actions, git submodules, apt on hosted runners.

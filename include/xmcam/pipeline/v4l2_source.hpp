@@ -100,7 +100,12 @@ class V4l2Source : public VideoSource {
   int neg_h_ = 0;
   int neg_stride_ = 0;
   uint64_t seq_ = 0;
-  std::string by_id_path_;  // stable path used for hot-plug recovery
+  // Hot-plug recovery identity. by-path (physical port) is tried first: it is
+  // unambiguous on fixed wiring even when units share a USB serial; by-id
+  // (serial) is the fallback for a device replugged into a different port.
+  std::string by_path_path_;
+  std::string by_id_path_;
+  std::string card_;  // QUERYCAP card, verified on recovery re-open
   uint32_t generation_ = 0;
 
   mutable std::mutex stats_mtx_;

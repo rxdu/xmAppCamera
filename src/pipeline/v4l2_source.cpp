@@ -48,26 +48,31 @@ std::vector<std::string> ListVideoNodes() {
   return nodes;
 }
 
-// Map a /dev/videoN to its stable /dev/v4l/by-id/... symlink, if any.
-std::string ResolveByIdPath(const std::string& node) {
-  const char* dir = "/dev/v4l/by-id";
+// Map a /dev/videoN to a stable symlink under `dir`, if any.
+std::string ResolveStableLink(const char* dir, const std::string& node) {
   DIR* d = ::opendir(dir);
   if (!d) return {};
   std::string result;
-  char target[PATH_MAX];
   for (dirent* e = ::readdir(d); e; e = ::readdir(d)) {
     if (e->d_name[0] == '.') continue;
     std::string link = std::string(dir) + "/" + e->d_name;
     char resolved[PATH_MAX];
-    if (::realpath(link.c_str(), resolved) &&
-        node == resolved) {
+    if (::realpath(link.c_str(), resolved) && node == resolved) {
       result = link;
       break;
     }
-    (void)target;
   }
   ::closedir(d);
   return result;
+}
+
+// by-id encodes the USB serial (ambiguous when units share a serial);
+// by-path encodes the physical port chain (stable on fixed wiring).
+std::string ResolveByIdPath(const std::string& node) {
+  return ResolveStableLink("/dev/v4l/by-id", node);
+}
+std::string ResolveByPathPath(const std::string& node) {
+  return ResolveStableLink("/dev/v4l/by-path", node);
 }
 
 }  // namespace
@@ -170,6 +175,7 @@ std::vector<DeviceInfo> V4l2Source::Enumerate() {
     }
     info.caps = std::move(caps);
     info.by_id = ResolveByIdPath(node);
+    info.by_path = ResolveByPathPath(node);
     XLOG_INFO("V4l2 device: {} [{}] formats={}", info.device, info.card,
               info.caps.formats.size());
     result.push_back(std::move(info));
@@ -194,13 +200,19 @@ Status V4l2Source::Open(const SourceDescriptor& desc) {
   st = QueryCaps(desc.device, &caps_);
   if (!st.ok()) return st;
 
-  // Remember the stable identity for hot-plug recovery: after a replug the
-  // node number may change (/dev/video0 -> /dev/video2), the by-id link won't.
+  // Remember the stable identities for hot-plug recovery: after a replug the
+  // node number may change (/dev/video0 -> /dev/video2); the by-path link is
+  // stable per physical port, the by-id link per USB serial.
   char resolved[PATH_MAX];
   std::string node = desc.device;
   if (::realpath(desc.device.c_str(), resolved)) node = resolved;
+  by_path_path_ = ResolveByPathPath(node);
   by_id_path_ = ResolveByIdPath(node);
-  if (by_id_path_.empty()) by_id_path_ = desc.device;
+  {
+    v4l2_capability cap{};
+    if (dev_->Ioctl(VIDIOC_QUERYCAP, &cap) == 0)
+      card_ = reinterpret_cast<const char*>(cap.card);
+  }
 
   return NegotiateFormat();
 }
@@ -436,32 +448,52 @@ bool V4l2Source::RecoverDevice() {
   pool_.reset();
   dev_.reset();
 
-  const std::string& path = by_id_path_;
+  // Candidate order: by-path (same physical port — unambiguous even with
+  // duplicate USB serials), then by-id (survives a port change), then the
+  // original node. The card name is verified so we never silently adopt a
+  // different device that landed on the same handle.
+  std::vector<std::string> candidates;
+  if (!by_path_path_.empty()) candidates.push_back(by_path_path_);
+  if (!by_id_path_.empty()) candidates.push_back(by_id_path_);
+  candidates.push_back(desc_.device);
+
   int backoff_ms = 200;
   while (running_.load()) {
     std::this_thread::sleep_for(std::chrono::milliseconds(backoff_ms));
     backoff_ms = std::min(backoff_ms * 2, 2000);
 
-    auto dev = std::make_shared<V4l2Device>();
-    if (!dev->Open(path).ok()) continue;
-    dev_ = std::move(dev);
+    for (const auto& path : candidates) {
+      auto dev = std::make_shared<V4l2Device>();
+      if (!dev->Open(path).ok()) continue;
 
-    if (!NegotiateFormat().ok() || !SetupBuffers(kBufferCount).ok()) {
-      dev_.reset();
-      pool_.reset();
-      continue;
-    }
+      if (!card_.empty()) {
+        v4l2_capability cap{};
+        if (dev->Ioctl(VIDIOC_QUERYCAP, &cap) != 0 ||
+            card_ != reinterpret_cast<const char*>(cap.card)) {
+          XLOG_WARN("V4l2 recovery: {} is a different device — skipping",
+                    path);
+          continue;
+        }
+      }
+      dev_ = std::move(dev);
 
-    ++generation_;
-    {
-      std::lock_guard<std::mutex> lk(stats_mtx_);
-      stats_.device_lost = false;
-      stats_.generation = generation_;
+      if (!NegotiateFormat().ok() || !SetupBuffers(kBufferCount).ok()) {
+        dev_.reset();
+        pool_.reset();
+        continue;
+      }
+
+      ++generation_;
+      {
+        std::lock_guard<std::mutex> lk(stats_mtx_);
+        stats_.device_lost = false;
+        stats_.generation = generation_;
+      }
+      capture_rate_.Reset();
+      XLOG_INFO("V4l2 device recovered via {} (generation {})", path,
+                generation_);
+      return true;
     }
-    capture_rate_.Reset();
-    XLOG_INFO("V4l2 device recovered via {} (generation {})", path,
-              generation_);
-    return true;
   }
   return false;  // Stop() requested while recovering
 }

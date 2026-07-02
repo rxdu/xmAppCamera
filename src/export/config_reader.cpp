@@ -94,6 +94,8 @@ Status ParseRoot(const YAML::Node& root, CameraConfig* out) {
                   type);
       cfg.source.type = SourceDescriptor::Type::kV4l2;
       cfg.source.device = source["device"].as<std::string>("");
+      cfg.device_by_path = source["device_by_path"].as<std::string>("");
+      cfg.device_by_id = source["device_by_id"].as<std::string>("");
       cfg.card = source["card"].as<std::string>("");
     }
   }

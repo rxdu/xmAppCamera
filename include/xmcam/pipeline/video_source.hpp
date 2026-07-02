@@ -32,7 +32,10 @@ class ControlSet;  // forward decl (V4L2 control surface, Phase 2)
 // Discovered device (V4L2 enumeration).
 struct DeviceInfo {
   std::string device;   // /dev/videoN actually opened
-  std::string by_id;    // stable /dev/v4l/by-id/... path (may be empty)
+  std::string by_id;    // /dev/v4l/by-id/... — serial-based (ambiguous when
+                        // units share a serial); may be empty
+  std::string by_path;  // /dev/v4l/by-path/... — physical-port-based (stable
+                        // on fixed wiring); may be empty
   std::string card;     // VIDIOC_QUERYCAP card name
   std::string bus;      // bus_info
   SourceCaps caps;

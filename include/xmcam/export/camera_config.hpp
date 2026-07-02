@@ -30,6 +30,12 @@ struct ControlValue {
 struct CameraConfig {
   int schema_version = 1;
   SourceDescriptor source;
+  // Stable device handles alongside source.device (v4l2 only): by-id is USB-
+  // serial-based (ambiguous when units share a serial — see the qualification
+  // serial-uniqueness check); by-path is physical-port-based and preferred on
+  // fixed wiring. Consumers should try by-path, then by-id, then device.
+  std::string device_by_id;
+  std::string device_by_path;
   // Human-readable card name (from VIDIOC_QUERYCAP); informational, v4l2 only.
   std::string card;
   // Explicit GStreamer pipeline (mirrors source.pipeline; kept for clarity when

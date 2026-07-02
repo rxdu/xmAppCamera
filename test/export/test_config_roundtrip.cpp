@@ -21,6 +21,8 @@ CameraConfig MakeV4l2Config() {
   cfg.source.type = SourceDescriptor::Type::kV4l2;
   cfg.source.device = "/dev/v4l/by-id/usb-Foo_Camera_1234-video-index0";
   cfg.card = "Foo Camera";
+  cfg.device_by_id = "/dev/v4l/by-id/usb-Foo_Camera_1234-video-index0";
+  cfg.device_by_path = "/dev/v4l/by-path/pci-0000:00:14.0-usb-0:2:1.0-video-index0";
   cfg.source.format = PixelFormat::kYuyv;
   cfg.source.width = 640;
   cfg.source.height = 480;
@@ -52,6 +54,8 @@ CameraConfig MakeGstreamerConfig() {
 void ExpectSourceEq(const CameraConfig& a, const CameraConfig& b) {
   EXPECT_EQ(a.source.type, b.source.type);
   EXPECT_EQ(a.source.device, b.source.device);
+  EXPECT_EQ(a.device_by_id, b.device_by_id);
+  EXPECT_EQ(a.device_by_path, b.device_by_path);
   EXPECT_EQ(a.source.uri, b.source.uri);
   EXPECT_EQ(a.source.format, b.source.format);
   EXPECT_EQ(a.source.width, b.source.width);

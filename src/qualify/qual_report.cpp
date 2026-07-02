@@ -61,6 +61,7 @@ Status WriteReportYaml(const QualReport& r, const std::string& path) {
   out << YAML::Key << "device" << YAML::Value << r.device;
   out << YAML::Key << "card" << YAML::Value << r.card;
   out << YAML::Key << "by_id" << YAML::Value << r.by_id;
+  out << YAML::Key << "by_path" << YAML::Value << r.by_path;
   out << YAML::Key << "started_at" << YAML::Value << r.started_at;
   out << YAML::Key << "finished_at" << YAML::Value << r.finished_at;
   EmitPlatform(out, r.platform);
@@ -100,6 +101,7 @@ Status WriteReportMarkdown(const QualReport& r, const std::string& path) {
   md += "- **Device:** `" + r.device + "`\n";
   if (!r.card.empty()) md += "- **Card:** " + r.card + "\n";
   if (!r.by_id.empty()) md += "- **By-id:** `" + r.by_id + "`\n";
+  if (!r.by_path.empty()) md += "- **By-path:** `" + r.by_path + "`\n";
   if (!r.started_at.empty()) md += "- **Started:** " + r.started_at + "\n";
   if (!r.finished_at.empty()) md += "- **Finished:** " + r.finished_at + "\n";
   md += "\n## Platform\n\n";

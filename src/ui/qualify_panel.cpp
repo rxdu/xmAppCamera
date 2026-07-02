@@ -302,6 +302,7 @@ void QualifyPanel::ExportReport() {
     if (d.device == rep.device) {
       rep.card = d.card;
       rep.by_id = d.by_id;
+      rep.by_path = d.by_path;
     }
   {
     std::lock_guard<std::mutex> lk(mtx_);

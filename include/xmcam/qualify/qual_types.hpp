@@ -53,7 +53,7 @@ struct PlatformInfo {
 
 // Aggregate qualification report for one camera unit.
 struct QualReport {
-  std::string device, card, by_id;
+  std::string device, card, by_id, by_path;
   PlatformInfo platform;
   std::vector<QualCheckResult> results;
   std::vector<std::pair<std::string, std::string>> manual_fields;

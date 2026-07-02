@@ -8,8 +8,15 @@ The file `ConfigWriter` produces / `ConfigReader` consumes. YAML (family standar
 schema_version: 1
 source:
   type: v4l2                       # v4l2 | gstreamer
-  device: /dev/v4l/by-id/usb-Foo_Camera_1234-video-index0   # stable id preferred
-  device_fallback: /dev/video0     # last-seen node, used only if by-id missing
+  device: /dev/video0              # node at export time (may renumber)
+  # Stable handles — consumers should try by_path, then by_id, then device.
+  # by_path = physical USB port chain: deterministic on fixed wiring, and the
+  #   only reliable handle when identical units share a USB serial (see the
+  #   qualification serial_uniqueness check).
+  # by_id = USB serial: survives replug into another port, but collides
+  #   across units with duplicate serials.
+  device_by_path: /dev/v4l/by-path/pci-0000:00:14.0-usb-0:2:1.0-video-index0
+  device_by_id: /dev/v4l/by-id/usb-Foo_Camera_1234-video-index0
   card: "Foo Camera"               # from VIDIOC_QUERYCAP, for human matching
 format:
   fourcc: YUYV                     # negotiated pixel format

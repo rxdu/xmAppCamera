@@ -37,6 +37,13 @@ std::string ConfigWriter::ToYamlString(const CameraConfig& cfg) {
   if (is_v4l2) {
     out << YAML::Key << "type" << YAML::Value << "v4l2";
     out << YAML::Key << "device" << YAML::Value << cfg.source.device;
+    // Stable handles: consumers should try by-path (physical port), then
+    // by-id (USB serial; ambiguous with duplicate serials), then device.
+    if (!cfg.device_by_path.empty())
+      out << YAML::Key << "device_by_path" << YAML::Value
+          << cfg.device_by_path;
+    if (!cfg.device_by_id.empty())
+      out << YAML::Key << "device_by_id" << YAML::Value << cfg.device_by_id;
     if (!cfg.card.empty())
       out << YAML::Key << "card" << YAML::Value << cfg.card;
   } else {

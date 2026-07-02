@@ -39,8 +39,9 @@ class RtspSink : public FrameSink {
   // FrameSink: called on the source producer thread.
   void OnFrame(const VideoFrame& frame) override;
 
-  // Internal (called from the gst-rtsp media-configure callback).
+  // Internal (called from gst-rtsp callbacks).
   void OnMediaConfigure(GstElement* appsrc);
+  void SetFeed(bool on) { feed_.store(on); }
 
  private:
   void Loop();
@@ -55,6 +56,7 @@ class RtspSink : public FrameSink {
   int bitrate_kbps_ = 2000;
 
   std::mutex src_mtx_;
+  std::atomic<bool> feed_{true};  // encoder backpressure (need/enough-data)
   GstElement* appsrc_ = nullptr;  // current client's appsrc (ref held)
   int caps_w_ = 0;
   int caps_h_ = 0;

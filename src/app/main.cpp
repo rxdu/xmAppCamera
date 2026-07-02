@@ -34,6 +34,11 @@ int main() {
   if (std::getenv("XMCAM_AUTOSTART")) {
     if (auto st = app.StartFirstDevice(); !st.ok())
       XLOG_WARN("autostart: {}", st.message());
+    // Optional second hook: also publish the source via RTSP (port in env).
+    if (const char* port = std::getenv("XMCAM_AUTORTSP")) {
+      if (auto st = app.StartRtspExport(std::atoi(port), "/cam"); !st.ok())
+        XLOG_WARN("auto rtsp export: {}", st.message());
+    }
   }
 
   viewer.Show();  // blocking render loop

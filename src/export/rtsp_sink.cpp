@@ -13,6 +13,16 @@
 namespace xmotion {
 namespace {
 
+// Encoder backpressure: appsrc raises enough-data when its queue passes
+// max-bytes and need-data when it drains. We drop frames instead of blocking
+// the capture thread (FrameSink contract).
+void NeedDataCb(GstElement* /*src*/, guint /*len*/, gpointer user) {
+  static_cast<RtspSink*>(user)->SetFeed(true);
+}
+void EnoughDataCb(GstElement* /*src*/, gpointer user) {
+  static_cast<RtspSink*>(user)->SetFeed(false);
+}
+
 // media-configure: grab the named appsrc and register teardown handling.
 void MediaUnpreparedCb(GstRTSPMedia* /*media*/, gpointer user) {
   auto* self = static_cast<RtspSink*>(user);
@@ -57,9 +67,11 @@ void RtspSink::Loop() {
 
   GstRTSPMountPoints* mounts = gst_rtsp_server_get_mount_points(server_);
   GstRTSPMediaFactory* factory = gst_rtsp_media_factory_new();
+  // block=false + max-bytes(~4 frames of 720p I420): OnFrame drops when the
+  // encoder saturates (need/enough-data), never blocking the capture thread.
   gchar* launch = g_strdup_printf(
-      "( appsrc name=xmsrc is-live=true block=true format=time "
-      "do-timestamp=true ! videoconvert ! "
+      "( appsrc name=xmsrc is-live=true block=false max-bytes=6000000 "
+      "format=time do-timestamp=true ! videoconvert ! "
       "x264enc tune=zerolatency speed-preset=ultrafast bitrate=%d ! "
       "rtph264pay name=pay0 pt=96 config-interval=1 )",
       bitrate_kbps_);
@@ -102,10 +114,16 @@ void RtspSink::OnMediaConfigure(GstElement* appsrc) {
   if (appsrc_) gst_object_unref(appsrc_);
   appsrc_ = appsrc;  // may be nullptr (teardown); ownership transferred
   caps_w_ = caps_h_ = 0;  // force caps refresh on next frame
+  feed_.store(true);
+  if (appsrc_) {
+    g_signal_connect(appsrc_, "need-data", G_CALLBACK(NeedDataCb), this);
+    g_signal_connect(appsrc_, "enough-data", G_CALLBACK(EnoughDataCb), this);
+  }
 }
 
 void RtspSink::OnFrame(const VideoFrame& f) {
   if (f.format != PixelFormat::kI420) return;  // encoder expects I420
+  if (!feed_.load()) return;  // encoder saturated: drop, never block capture
   std::lock_guard<std::mutex> lk(src_mtx_);
   if (!appsrc_) return;  // no client connected
 

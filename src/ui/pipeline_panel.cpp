@@ -54,7 +54,11 @@ void PipelinePanel::Draw() {
       validate_msg_ = st.ok() ? "valid" : st.message();
     }
     ImGui::SameLine();
-    if (ImGui::Button("Play")) app_->StartGst(buffer_);
+    if (ImGui::Button("Play")) {
+      Status st = app_->StartGst(buffer_);
+      validate_ok_ = st.ok();
+      validate_msg_ = st.ok() ? "playing" : st.message();
+    }
     ImGui::SameLine();
     if (ImGui::Button("Stop")) app_->StopSource();
 
@@ -71,8 +75,12 @@ void PipelinePanel::Draw() {
     ImGui::SetNextItemWidth(120);
     ImGui::InputInt("port", &export_port_);
     if (!app_->RtspExporting()) {
-      if (ImGui::Button("Start RTSP export"))
-        app_->StartRtspExport(export_port_, "/cam");
+      if (ImGui::Button("Start RTSP export")) {
+        Status st = app_->StartRtspExport(export_port_, "/cam");
+        rtsp_msg_ = st.ok() ? "" : st.message();
+      }
+      if (!rtsp_msg_.empty())
+        ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "%s", rtsp_msg_.c_str());
     } else {
       if (ImGui::Button("Stop RTSP export")) app_->StopRtspExport();
       ImGui::TextColored(ImVec4(0, 1, 0, 1), "%s", app_->RtspUrl().c_str());

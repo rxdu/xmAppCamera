@@ -8,6 +8,8 @@
 
 #include "imgui.h"
 
+#include "xmsigma/logging/xlogger.hpp"
+
 namespace xmotion {
 
 DevicePanel::DevicePanel(AppController* app)
@@ -125,8 +127,13 @@ void DevicePanel::Draw() {
     if (ImGui::Button("Start")) {
       const auto& sz = fmt.sizes[sel_size_];
       const double fps = sz.fps.empty() ? 30.0 : sz.fps[sel_fps_];
-      app_->StartV4l2(devices[sel_dev_].device, fmt.format, sz.width, sz.height,
-                      fps);
+      // Failure detail is shown via app_->status() below; log it too.
+      if (Status st = app_->StartV4l2(devices[sel_dev_].device, fmt.format,
+                                      sz.width, sz.height, fps);
+          !st.ok()) {
+        XLOG_WARN("start {} failed: {}", devices[sel_dev_].device,
+                  st.message());
+      }
     }
     ImGui::SameLine();
     if (ImGui::Button("Stop")) app_->StopSource();

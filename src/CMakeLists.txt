@@ -1,3 +1,6 @@
+# Our code builds warning-clean; third_party is not subjected to this.
+add_compile_options(-Wall -Wextra)
+
 # Backend libraries build with no GUI dependency (core testable without a
 # window). GUI layers (ui/app) are added only when XMCAM_BUILD_GUI is ON.
 add_subdirectory(core)

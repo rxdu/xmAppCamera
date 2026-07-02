@@ -26,6 +26,7 @@ class PipelinePanel : public quickviz::Panel {
   char buffer_[2048];
   std::string validate_msg_;
   bool validate_ok_ = false;
+  std::string rtsp_msg_;  // last RTSP-export failure, shown in the panel
   int export_port_ = 8554;
 };
 

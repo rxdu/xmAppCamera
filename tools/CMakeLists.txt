@@ -1,3 +1,4 @@
+add_compile_options(-Wall -Wextra)
 add_executable(xmcam_v4l2_smoke v4l2_capture_smoke.cpp)
 target_link_libraries(xmcam_v4l2_smoke PRIVATE xmcam_pipeline)
 

@@ -6,6 +6,8 @@
 
 #include "imgui.h"
 
+#include "xmsigma/logging/xlogger.hpp"
+
 namespace xmotion {
 
 ControlPanel::ControlPanel(AppController* app)
@@ -17,7 +19,9 @@ void ControlPanel::ReloadValues(ControlSet* cs) {
   values_.clear();
   for (const auto& c : cs->controls()) {
     int64_t v = c.default_value;
-    cs->Get(c.id, &v);
+    // On read failure the default remains as the display value.
+    if (Status st = cs->Get(c.id, &v); !st.ok())
+      XLOG_DEBUG("control '{}' read failed: {}", c.name, st.message());
     values_[c.id] = v;
   }
 }
@@ -39,9 +43,11 @@ void ControlPanel::Draw() {
     }
 
     if (ImGui::Button("Reset to defaults")) {
-      for (const auto& c : cs->controls())
-        if (!c.IsReadOnly() && !c.IsInactive() && !c.IsDisabled())
-          cs->Set(c.id, c.default_value);
+      for (const auto& c : cs->controls()) {
+        if (c.IsReadOnly() || c.IsInactive() || c.IsDisabled()) continue;
+        if (Status st = cs->Set(c.id, c.default_value); !st.ok())
+          XLOG_WARN("reset '{}' failed: {}", c.name, st.message());
+      }
       ReloadValues(cs);
     }
     ImGui::Separator();
@@ -86,7 +92,11 @@ void ControlPanel::Draw() {
           break;
         }
         case ControlType::kButton: {
-          if (ImGui::Button(c.name.c_str())) cs->Set(c.id, 1);
+          if (ImGui::Button(c.name.c_str())) {
+            if (Status st = cs->Set(c.id, 1); !st.ok())
+              XLOG_WARN("control '{}' trigger failed: {}", c.name,
+                        st.message());
+          }
           break;
         }
         default: {  // integer-like

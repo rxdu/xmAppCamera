@@ -32,6 +32,9 @@ class AppController {
   // --- source lifecycle (render thread) ---
   Status StartV4l2(const std::string& device, PixelFormat fmt, int width,
                    int height, double fps);
+  // Convenience for demos/headless tests: pick the first device, prefer MJPEG
+  // near 1280x720, and start it. Returns kNotFound if no device.
+  Status StartFirstDevice();
   Status StartGst(const std::string& pipeline);
   void StopSource();
 

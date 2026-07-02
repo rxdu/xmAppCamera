@@ -4,6 +4,7 @@
  *
  * Copyright (c) 2026 Ruixiang Du (rdu)
  */
+#include <cstdlib>
 #include <memory>
 
 #include "viewer/viewer.hpp"
@@ -27,6 +28,13 @@ int main() {
 
   // One root panel fills the window and lays out the sidebar + preview.
   viewer.AddSceneObject(std::make_shared<MainDockingPanel>(&app));
+
+  // Demo/headless-test hook: auto-start the first camera when XMCAM_AUTOSTART
+  // is set, so the preview path can be exercised without clicking.
+  if (std::getenv("XMCAM_AUTOSTART")) {
+    if (auto st = app.StartFirstDevice(); !st.ok())
+      XLOG_WARN("autostart: {}", st.message());
+  }
 
   viewer.Show();  // blocking render loop
 

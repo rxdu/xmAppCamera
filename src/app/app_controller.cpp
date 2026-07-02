@@ -4,6 +4,8 @@
  */
 #include "xmcam/app/app_controller.hpp"
 
+#include <cstdlib>
+
 #include "xmsigma/logging/xlogger.hpp"
 
 #ifdef XMCAM_WITH_GSTREAMER
@@ -56,6 +58,30 @@ Status AppController::StartV4l2(const std::string& device, PixelFormat fmt,
   status_ = "streaming " + device;
   XLOG_INFO("AppController: started V4L2 {}", device);
   return Ok();
+}
+
+Status AppController::StartFirstDevice() {
+  RefreshDevices();
+  if (devices_.empty()) return Err(ErrorCode::kNotFound, "no V4L2 device");
+  const DeviceInfo& dev = devices_.front();
+
+  // Prefer MJPEG (the high-fps path), else the first format.
+  const FormatDesc* fmt = nullptr;
+  for (const auto& f : dev.caps.formats)
+    if (f.format == PixelFormat::kMjpeg) fmt = &f;
+  if (!fmt && !dev.caps.formats.empty()) fmt = &dev.caps.formats.front();
+  if (!fmt || fmt->sizes.empty())
+    return Err(ErrorCode::kUnsupported, "device has no usable format");
+
+  // Choose the size nearest 1280x720.
+  const FrameSize* best = &fmt->sizes.front();
+  long best_d = 1L << 60;
+  for (const auto& s : fmt->sizes) {
+    const long d = std::abs(s.width - 1280L) + std::abs(s.height - 720L);
+    if (d < best_d) { best_d = d; best = &s; }
+  }
+  const double fps = best->fps.empty() ? 30.0 : best->fps.front();
+  return StartV4l2(dev.device, fmt->format, best->width, best->height, fps);
 }
 
 Status AppController::StartGst(const std::string& pipeline) {

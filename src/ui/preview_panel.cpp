@@ -50,7 +50,7 @@ void PreviewPanel::Draw() {
       ImGui::TextColored(ImVec4(0, 1, 0, 1), "%dx%d  %.1f fps disp",
                          last_w_, last_h_, display_rate_.rate());
     } else {
-      ImGui::TextDisabled("no signal — select a device or start a stream");
+      ImGui::TextDisabled("no signal - select a device or start a stream");
     }
   }
   End();

@@ -16,3 +16,8 @@ Project-visible record of mistakes and their corrections. Consult during intake 
 - **Pattern:** (1) SSH submodule URLs (`git@github.com:...`) fail in GitHub Actions (no SSH key). (2) `ubuntu-22.04` runners can't install `libgstreamer1.0-dev` — its `libunwind-dev` dep conflicts with the runner's preinstalled LLVM libunwind ("held broken packages").
 - **Correction:** Use HTTPS submodule URLs (public repos fetch tokenless). Run CI on `ubuntu-24.04`. Remember `libfontconfig1-dev` — quickviz `viewer` links Fontconfig.
 - **Context:** GitHub Actions, git submodules, apt on hosted runners.
+
+### Visual verification must check orientation, not just color
+- **Pattern:** The GPU YUV shader shipped with an unnecessary V-flip; the verification screenshot was checked for correct colors but the upside-down orientation was missed — the user caught it.
+- **Correction:** When adding a V-flip in a render path, derive it end-to-end (upload row order → FBO v-coord → ImGui uv convention) instead of guessing, and verify screenshots against a scene with obvious up/down (floor/ceiling). Here: planes upload image-top at v=0 and ImGui shows v=0 at top → identity UVs, no flip.
+- **Context:** OpenGL FBO render-to-texture + ImGui::Image display path.

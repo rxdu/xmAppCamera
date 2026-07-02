@@ -79,6 +79,9 @@ class V4l2Source : public VideoSource {
   Status NegotiateFormat();
   Status SetupBuffers(unsigned count);
   void CaptureLoop();
+  // Hot-plug: re-open (preferring the stable by-id path), renegotiate, and
+  // restart streaming. Loops with backoff until success or Stop().
+  bool RecoverDevice();
 
   std::shared_ptr<V4l2Device> dev_;
   SourceDescriptor desc_;
@@ -97,6 +100,8 @@ class V4l2Source : public VideoSource {
   int neg_h_ = 0;
   int neg_stride_ = 0;
   uint64_t seq_ = 0;
+  std::string by_id_path_;  // stable path used for hot-plug recovery
+  uint32_t generation_ = 0;
 
   mutable std::mutex stats_mtx_;
   SourceStats stats_;

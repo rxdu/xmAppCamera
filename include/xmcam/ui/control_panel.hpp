@@ -28,7 +28,7 @@ class ControlPanel : public quickviz::Panel {
   void ReloadValues(ControlSet* cs);
 
   AppController* app_;
-  std::string loaded_device_;
+  int loaded_epoch_ = -1;
   std::unordered_map<uint32_t, int64_t> values_;
 };
 

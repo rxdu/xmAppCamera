@@ -22,6 +22,10 @@ struct SourceStats {
   double upload_ms = 0.0;     // last GL upload duration
   double latency_ms = 0.0;    // glass-to-glass estimate (present - pts)
   std::string decoder;        // active decoder element / "raw"
+
+  // Hot-plug: bumped on every successful reconnect; "lost" while recovering.
+  uint32_t generation = 0;
+  bool device_lost = false;
 };
 
 }  // namespace xmotion

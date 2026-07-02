@@ -55,6 +55,8 @@ Status AppController::StartV4l2(const std::string& device, PixelFormat fmt,
       ctrl_dev_.reset();
     }
   }
+  ++controls_epoch_;
+  last_generation_ = 0;
   status_ = "streaming " + device;
   XLOG_INFO("AppController: started V4L2 {}", device);
   return Ok();
@@ -118,7 +120,12 @@ Status AppController::StartRtspExport(int port, const std::string& mount) {
     rtsp_.reset();
     return st;
   }
-  source_->SetFrameSink(rtsp_.get());
+  if (!AttachFrameSink(rtsp_.get())) {
+    rtsp_->Stop();
+    rtsp_.reset();
+    return Err(ErrorCode::kInvalidArgument,
+               "frame tee busy (qualification tap active?)");
+  }
   return Ok();
 #else
   (void)port;
@@ -129,8 +136,8 @@ Status AppController::StartRtspExport(int port, const std::string& mount) {
 
 void AppController::StopRtspExport() {
 #ifdef XMCAM_WITH_RTSP_SERVER
-  if (source_) source_->SetFrameSink(nullptr);
   if (rtsp_) {
+    DetachFrameSink(rtsp_.get());
     rtsp_->Stop();
     rtsp_.reset();
   }
@@ -160,6 +167,7 @@ void AppController::StopSource() {
     source_->Close();
     source_.reset();
   }
+  attached_sink_ = nullptr;  // any remaining tap is now unattached
   controls_.reset();
   ctrl_dev_.reset();
   active_device_.clear();
@@ -168,7 +176,43 @@ void AppController::StopSource() {
 
 bool AppController::PullFrame(VideoFrame* out) {
   if (!source_) return false;
+  MaintainRecovery();
   return source_->Frames().TryPull(*out);
+}
+
+void AppController::MaintainRecovery() {
+  const SourceStats s = source_->GetStats();
+  if (s.generation == last_generation_) return;
+  last_generation_ = s.generation;
+  // The device came back on a (possibly new) node: the old control fd is dead.
+  // Re-open via the same path we started with and rebuild the control set; the
+  // UI reloads its cached values when controls_epoch changes. Control values
+  // are NOT auto re-applied — the panel shows what the camera actually has
+  // (that's the honest post-recovery state; use config load to restore).
+  controls_.reset();
+  ctrl_dev_ = std::make_shared<V4l2Device>();
+  if (ctrl_dev_->Open(active_device_).ok()) {
+    auto cs = std::make_unique<ControlSet>(ctrl_dev_);
+    if (cs->Refresh().ok()) controls_ = std::move(cs);
+  }
+  ++controls_epoch_;
+  status_ = "recovered " + active_device_ + " (gen " +
+            std::to_string(s.generation) + ")";
+  XLOG_INFO("AppController: control set rebuilt after recovery (gen {})",
+            s.generation);
+}
+
+bool AppController::AttachFrameSink(FrameSink* sink) {
+  if (!source_ || attached_sink_) return false;
+  attached_sink_ = sink;
+  source_->SetFrameSink(sink);
+  return true;
+}
+
+void AppController::DetachFrameSink(FrameSink* sink) {
+  if (attached_sink_ != sink) return;
+  if (source_) source_->SetFrameSink(nullptr);
+  attached_sink_ = nullptr;
 }
 
 SourceStats AppController::Stats() const {

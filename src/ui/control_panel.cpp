@@ -31,9 +31,10 @@ void ControlPanel::Draw() {
       End();
       return;
     }
-    // Reload cached values when the active device changes.
-    if (loaded_device_ != app_->active_device()) {
-      loaded_device_ = app_->active_device();
+    // Reload cached values when the control set is rebuilt (device change or
+    // hot-plug recovery).
+    if (loaded_epoch_ != app_->controls_epoch()) {
+      loaded_epoch_ = app_->controls_epoch();
       ReloadValues(cs);
     }
 

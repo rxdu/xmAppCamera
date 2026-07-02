@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 
@@ -193,6 +194,14 @@ Status V4l2Source::Open(const SourceDescriptor& desc) {
   st = QueryCaps(desc.device, &caps_);
   if (!st.ok()) return st;
 
+  // Remember the stable identity for hot-plug recovery: after a replug the
+  // node number may change (/dev/video0 -> /dev/video2), the by-id link won't.
+  char resolved[PATH_MAX];
+  std::string node = desc.device;
+  if (::realpath(desc.device.c_str(), resolved)) node = resolved;
+  by_id_path_ = ResolveByIdPath(node);
+  if (by_id_path_.empty()) by_id_path_ = desc.device;
+
   return NegotiateFormat();
 }
 
@@ -320,10 +329,17 @@ void V4l2Source::CaptureLoop() {
     if (pr < 0) {
       if (errno == EINTR) continue;
       XLOG_ERROR("V4l2 poll error: {}", std::strerror(errno));
-      break;
+      if (!RecoverDevice()) break;
+      continue;
     }
     if (pr == 0) {
       XLOG_WARN("V4l2 capture timeout (no frame in 1s)");
+      continue;
+    }
+    if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+      XLOG_ERROR("V4l2 device error (revents=0x{:x}) — attempting recovery",
+                 pfd.revents);
+      if (!RecoverDevice()) break;
       continue;
     }
 
@@ -332,7 +348,12 @@ void V4l2Source::CaptureLoop() {
     buf.memory = V4L2_MEMORY_MMAP;
     if (dev_->Ioctl(VIDIOC_DQBUF, &buf) != 0) {
       if (errno == EAGAIN) continue;
-      XLOG_ERROR("V4l2 DQBUF error: {}", std::strerror(errno));
+      const int e = errno;
+      XLOG_ERROR("V4l2 DQBUF error: {}", std::strerror(e));
+      if (e == ENODEV || e == EIO || e == ENXIO) {
+        if (!RecoverDevice()) break;
+        continue;
+      }
       break;
     }
 
@@ -401,6 +422,46 @@ void V4l2Source::CaptureLoop() {
     EmitFrame(f);
     frames_.Push(std::move(f));
   }
+}
+
+bool V4l2Source::RecoverDevice() {
+  {
+    std::lock_guard<std::mutex> lk(stats_mtx_);
+    stats_.device_lost = true;
+  }
+  // Drop the dead device's pool; in-flight frame leases keep it (and its fd)
+  // alive until they release, so this is safe with zero-copy frames out.
+  pool_.reset();
+  dev_.reset();
+
+  const std::string& path = by_id_path_;
+  int backoff_ms = 200;
+  while (running_.load()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(backoff_ms));
+    backoff_ms = std::min(backoff_ms * 2, 2000);
+
+    auto dev = std::make_shared<V4l2Device>();
+    if (!dev->Open(path).ok()) continue;
+    dev_ = std::move(dev);
+
+    if (!NegotiateFormat().ok() || !SetupBuffers(kBufferCount).ok()) {
+      dev_.reset();
+      pool_.reset();
+      continue;
+    }
+
+    ++generation_;
+    {
+      std::lock_guard<std::mutex> lk(stats_mtx_);
+      stats_.device_lost = false;
+      stats_.generation = generation_;
+    }
+    capture_rate_.Reset();
+    XLOG_INFO("V4l2 device recovered via {} (generation {})", path,
+              generation_);
+    return true;
+  }
+  return false;  // Stop() requested while recovering
 }
 
 void V4l2Source::Stop() {

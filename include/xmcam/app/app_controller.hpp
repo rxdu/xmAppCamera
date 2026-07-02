@@ -64,6 +64,14 @@ class AppController {
 
   // --- controls (non-null only for a running V4L2 source) ---
   ControlSet* Controls() { return controls_.get(); }
+  // Bumped whenever the control set is rebuilt (start, hot-plug recovery);
+  // panels re-read cached values when it changes.
+  int controls_epoch() const { return controls_epoch_; }
+
+  // Attach/detach a frame tee on the active source (qualification tap, RTSP).
+  // Only one sink at a time; returns false if none active or slot taken.
+  bool AttachFrameSink(FrameSink* sink);
+  void DetachFrameSink(FrameSink* sink);
 
   // --- RTSP re-export (Phase 5; no-op if built without gst-rtsp-server) ---
   Status StartRtspExport(int port, const std::string& mount);
@@ -76,9 +84,14 @@ class AppController {
   std::unique_ptr<VideoSource> source_;
   std::shared_ptr<V4l2Device> ctrl_dev_;
   std::unique_ptr<ControlSet> controls_;
+  void MaintainRecovery();  // rebuild controls after a hot-plug recovery
+
   std::string status_ = "idle";
   std::string active_device_;
   DisplayStats display_stats_;
+  int controls_epoch_ = 0;
+  uint32_t last_generation_ = 0;
+  FrameSink* attached_sink_ = nullptr;  // render-thread only
 #ifdef XMCAM_WITH_RTSP_SERVER
   std::unique_ptr<RtspSink> rtsp_;
 #endif

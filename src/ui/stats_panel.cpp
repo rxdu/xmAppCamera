@@ -23,6 +23,11 @@ void StatsPanel::Draw() {
         s.frames > d.frames_shown ? s.frames - d.frames_shown : 0;
 
     ImGui::Text("status   : %s", app_->status().c_str());
+    if (s.device_lost)
+      ImGui::TextColored(ImVec4(1, 0.3f, 0.3f, 1),
+                         "DEVICE LOST - recovering...");
+    if (s.generation > 0)
+      ImGui::Text("recovered: %u time(s)", s.generation);
     if (d.width > 0) ImGui::Text("size     : %dx%d", d.width, d.height);
     ImGui::Separator();
     ImGui::Text("capture  : %.1f fps", s.capture_fps);

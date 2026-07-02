@@ -14,9 +14,11 @@ namespace {
 const char* kVert = R"(#version 330 core
 out vec2 vUv;
 void main() {
-  // Fullscreen triangle; flip V so the image is upright in the FBO.
+  // Fullscreen triangle. No V flip: planes are uploaded with image-top at
+  // v=0 and ImGui::Image also displays v=0 at the top, so identity UVs keep
+  // the image upright end-to-end.
   vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
-  vUv = vec2(p.x, 1.0 - p.y);
+  vUv = p;
   gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
 })";
 

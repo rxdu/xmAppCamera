@@ -1,5 +1,6 @@
 add_library(xmcam_ui
   frame_texture.cpp
+  yuv_converter.cpp
   main_docking_panel.cpp
   preview_panel.cpp
   device_panel.cpp

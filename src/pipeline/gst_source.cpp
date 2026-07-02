@@ -26,8 +26,10 @@ Status GstSource::Validate(const std::string& pipeline) {
 
 std::string GstSource::DefaultPipelineForUri(const std::string& uri) {
   // uridecodebin handles rtsp/http/file incl. depay+decode; RGBA for GL upload.
+  // I420 out: most decoders emit it natively so videoconvert is passthrough;
+  // the GPU converter handles YUV->RGB for display.
   return "uridecodebin uri=" + uri +
-         " ! videoconvert ! video/x-raw,format=RGBA ! "
+         " ! videoconvert ! video/x-raw,format=I420 ! "
          "appsink name=sink max-buffers=1 drop=true sync=false";
 }
 

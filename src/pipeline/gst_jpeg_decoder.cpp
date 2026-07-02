@@ -20,8 +20,10 @@ Status GstJpegDecoder::Open() {
   // appsrc is push-driven with JPEG; jpegdec -> RGBA out. sync=false: decode as
   // fast as pushed, no clock throttling. Not is-live: this is a pull-style
   // transform, not a real-time source.
+  // jpegdec emits I420 natively (4:2:0 JPEG), so videoconvert is a passthrough;
+  // the GPU does YUV->RGB. Avoids a CPU colorspace conversion per frame.
   const char* desc =
-      "appsrc name=src ! jpegdec ! videoconvert ! video/x-raw,format=RGBA ! "
+      "appsrc name=src ! jpegdec ! videoconvert ! video/x-raw,format=I420 ! "
       "appsink name=sink max-buffers=4 drop=false sync=false";
   GError* err = nullptr;
   pipeline_ = gst_parse_launch(desc, &err);

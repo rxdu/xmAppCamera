@@ -43,9 +43,21 @@ class AppController {
   const std::string& status() const { return status_; }
   const std::string& active_device() const { return active_device_; }
 
+  // Render-side counters, written by the preview panel each frame.
+  struct DisplayStats {
+    double display_fps = 0.0;
+    double upload_ms = 0.0;
+    double latency_ms = 0.0;  // glass-to-glass (USB/monotonic only)
+    uint64_t frames_shown = 0;
+    int width = 0;
+    int height = 0;
+  };
+
   // --- per-frame (render thread) ---
   bool PullFrame(VideoFrame* out);
   SourceStats Stats() const;
+  void SetDisplayStats(const DisplayStats& s) { display_stats_ = s; }
+  DisplayStats display_stats() const { return display_stats_; }
 
   // --- controls (non-null only for a running V4L2 source) ---
   ControlSet* Controls() { return controls_.get(); }
@@ -57,6 +69,7 @@ class AppController {
   std::unique_ptr<ControlSet> controls_;
   std::string status_ = "idle";
   std::string active_device_;
+  DisplayStats display_stats_;
 };
 
 }  // namespace xmotion

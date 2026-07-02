@@ -16,12 +16,12 @@ namespace xmotion {
 namespace {
 constexpr const char* kPresetRtsp =
     "rtspsrc location=rtsp://127.0.0.1:8554/stream latency=50 ! "
-    "rtph264depay ! decodebin3 ! videoconvert ! video/x-raw,format=RGBA ! "
+    "rtph264depay ! decodebin3 ! videoconvert ! video/x-raw,format=I420 ! "
     "appsink name=sink max-buffers=1 drop=true sync=false";
 constexpr const char* kPresetUdp =
     "udpsrc port=5004 caps=application/x-rtp,media=video,encoding-name=H264,"
     "payload=96,clock-rate=90000 ! rtpjitterbuffer latency=50 ! "
-    "rtph264depay ! avdec_h264 ! videoconvert ! video/x-raw,format=RGBA ! "
+    "rtph264depay ! avdec_h264 ! videoconvert ! video/x-raw,format=I420 ! "
     "appsink name=sink max-buffers=1 drop=true sync=false";
 }  // namespace
 

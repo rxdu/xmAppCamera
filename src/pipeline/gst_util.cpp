@@ -72,11 +72,17 @@ bool GstSampleToVideoFrame(GstSample* sample, uint64_t seq, VideoFrame* out) {
   out->width = GST_VIDEO_INFO_WIDTH(&info);
   out->height = GST_VIDEO_INFO_HEIGHT(&info);
   out->format = pf;
+  const uint8_t* base = lease->map.data;
+  const int nplanes = GST_VIDEO_INFO_N_PLANES(&info);
+  out->data = base + GST_VIDEO_INFO_PLANE_OFFSET(&info, 0);
   out->stride = static_cast<int>(GST_VIDEO_INFO_PLANE_STRIDE(&info, 0));
-  out->data = lease->map.data + GST_VIDEO_INFO_PLANE_OFFSET(&info, 0);
-  if (IsPlanar(pf) && GST_VIDEO_INFO_N_PLANES(&info) > 1) {
-    out->plane1 = lease->map.data + GST_VIDEO_INFO_PLANE_OFFSET(&info, 1);
+  if (nplanes > 1) {
+    out->plane1 = base + GST_VIDEO_INFO_PLANE_OFFSET(&info, 1);
     out->stride1 = static_cast<int>(GST_VIDEO_INFO_PLANE_STRIDE(&info, 1));
+  }
+  if (nplanes > 2) {
+    out->plane2 = base + GST_VIDEO_INFO_PLANE_OFFSET(&info, 2);
+    out->stride2 = static_cast<int>(GST_VIDEO_INFO_PLANE_STRIDE(&info, 2));
   }
   const GstClockTime pts = GST_BUFFER_PTS(buffer);
   out->pts_ns = GST_CLOCK_TIME_IS_VALID(pts) ? static_cast<int64_t>(pts) : 0;

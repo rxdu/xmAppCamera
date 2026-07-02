@@ -29,9 +29,12 @@ struct VideoFrame {
   const uint8_t* data = nullptr;
   int stride = 0;  // bytes per row of plane 0
 
-  // Plane 1 (e.g. interleaved UV for NV12); nullptr for packed formats.
+  // Planes 1/2 (e.g. U/V for I420, interleaved UV for NV12 uses only plane1);
+  // nullptr for packed formats.
   const uint8_t* plane1 = nullptr;
   int stride1 = 0;
+  const uint8_t* plane2 = nullptr;
+  int stride2 = 0;
 
   int64_t pts_ns = 0;   // presentation timestamp, for latency accounting
   uint64_t seq = 0;     // monotonically increasing capture sequence

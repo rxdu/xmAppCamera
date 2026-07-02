@@ -44,6 +44,7 @@ class QualifyPanel : public quickviz::Panel {
 
   AppController* app_;
   FrameTap tap_;
+  std::string tap_session_key_;  // session the tap is attached to
   bool tap_attached_ = false;
   bool auto_run_pending_ = false;  // XMCAM_AUTOQUALIFY headless-test hook
   bool auto_export_ = false;

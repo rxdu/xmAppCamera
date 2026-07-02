@@ -29,9 +29,26 @@ void ControlPanel::ReloadValues(ControlSet* cs) {
 void ControlPanel::Draw() {
   Begin();
   {
+    // Target selector: which running camera these controls bind to. Follows
+    // the global selection (tile / device-block clicks); combo overrides.
+    AppController::Session* target = app_->selected();
+    if (ImGui::BeginCombo("Camera",
+                          (target && target->controls) ? target->label.c_str()
+                                                       : "-")) {
+      for (auto& s : app_->sessions()) {
+        if (!s->controls) continue;
+        ImGui::PushID(s->id);
+        if (ImGui::Selectable(s->label.c_str(),
+                              app_->selected_key() == s->key))
+          app_->Select(s->key);
+        ImGui::PopID();
+      }
+      ImGui::EndCombo();
+    }
+
     ControlSet* cs = app_->Controls();
     if (!cs) {
-      ImGui::TextDisabled("start a USB camera to tune controls");
+      ImGui::TextDisabled("start (and select) a USB camera to tune controls");
       End();
       return;
     }

@@ -60,7 +60,9 @@ QualifyPanel::~QualifyPanel() {
 void QualifyPanel::JoinWorker() {
   if (worker_.joinable()) worker_.join();
   if (tap_attached_) {
-    app_->DetachFrameSink(&tap_);
+    if (AppController::Session* s = app_->FindSession(tap_session_key_))
+      app_->DetachFrameSink(*s, &tap_);
+    tap_session_key_.clear();
     tap_attached_ = false;
   }
 }
@@ -82,7 +84,11 @@ void QualifyPanel::StartAutomatedRun() {
   abort_.store(false);
 
   // The tap must be attached from the render thread before the worker starts.
-  tap_attached_ = app_->AttachFrameSink(&tap_);
+  tap_attached_ = false;
+  if (AppController::Session* s = app_->selected()) {
+    tap_attached_ = app_->AttachFrameSink(*s, &tap_);
+    tap_session_key_ = s->key;
+  }
   {
     std::lock_guard<std::mutex> lk(mtx_);
     results_.clear();
@@ -216,7 +222,11 @@ void QualifyPanel::StartPowerCycleCheck(bool expect_stream_recovery) {
   if (worker_busy_.load()) return;
   JoinWorker();
   abort_.store(false);
-  tap_attached_ = app_->AttachFrameSink(&tap_);
+  tap_attached_ = false;
+  if (AppController::Session* s = app_->selected()) {
+    tap_attached_ = app_->AttachFrameSink(*s, &tap_);
+    tap_session_key_ = s->key;
+  }
 
   const char* id = expect_stream_recovery ? "disconnect_recovery"
                                           : "power_cycle_identity";
@@ -357,6 +367,9 @@ void QualifyPanel::Draw() {
       End();
       return;
     }
+
+    if (AppController::Session* sel = app_->selected())
+      ImGui::TextDisabled("target: %s", sel->label.c_str());
 
     const bool busy = worker_busy_.load();
     if (busy) ImGui::BeginDisabled();

@@ -4,5 +4,7 @@ target_include_directories(xmcam_app_lib PUBLIC
 target_link_libraries(xmcam_app_lib PUBLIC xmcam_pipeline xmcam_control xmcam_export)
 add_library(xmcam::app ALIAS xmcam_app_lib)
 
-add_executable(xmAppCamera main.cpp)
-target_link_libraries(xmAppCamera PRIVATE xmcam_app_lib xmcam_ui viewer)
+if(XMCAM_BUILD_GUI)
+  add_executable(xmAppCamera main.cpp)
+  target_link_libraries(xmAppCamera PRIVATE xmcam_app_lib xmcam_ui viewer)
+endif()

@@ -55,9 +55,9 @@ void PipelinePanel::Draw() {
     //   idle           -> [Play]
     //   playing, clean -> [Stop]
     //   playing, edited-> [Apply] [Stop]
-    const bool gst_running =
-        app_->active_kind() == AppController::ActiveKind::kGst;
-    const bool dirty = gst_running && app_->active_pipeline() != buffer_;
+    AppController::Session* gs = app_->FindSession("network");
+    const bool gst_running = gs && gs->IsRunning();
+    const bool dirty = gst_running && gs->pipeline != buffer_;
 
     auto play_current = [&] {
       Status st = app_->StartGst(buffer_);
@@ -78,14 +78,17 @@ void PipelinePanel::Draw() {
         if (AccentButton("  Apply  ", kBtnApply)) play_current();
         ImGui::SameLine();
       }
-      if (AccentButton("  Stop  ", kBtnStop)) app_->StopSource();
+      if (AccentButton("  Stop  ", kBtnStop)) {
+        app_->StopSession("network");
+        gs = nullptr;
+      }
     }
 
-    if (gst_running) {
+    if (gs && gs->IsRunning()) {
       StatusLine(kTextLive, "LIVE", "network stream");
       if (dirty)
         ImGui::TextColored(kTextPending, "pending: pipeline edited - Apply");
-      DrawSourceStatsBlock(app_);
+      DrawSourceStatsBlock(*gs);
     }
     if (!validate_msg_.empty()) {
       ImGui::TextColored(validate_ok_ ? kTextLive : kTextError, "%s",
@@ -94,20 +97,27 @@ void PipelinePanel::Draw() {
 #endif
 
     ImGui::Separator();
-    ImGui::TextWrapped("Re-export the active source as RTSP/H.264:");
+    // Per-session export: targets the globally-selected session; several
+    // sessions can export at once (each RtspSink hosts its own server/port).
+    AppController::Session* sel = app_->selected();
+    ImGui::TextWrapped("Re-export as RTSP/H.264: %s",
+                       sel ? sel->label.c_str() : "(select a source)");
 #ifdef XMCAM_WITH_RTSP_SERVER
-    ImGui::SetNextItemWidth(120);
-    ImGui::InputInt("port", &export_port_);
-    if (!app_->RtspExporting()) {
+    if (!sel || !sel->IsRunning()) {
+      ImGui::TextDisabled("no running source selected");
+    } else if (!sel->rtsp || !sel->rtsp->running()) {
+      ImGui::SetNextItemWidth(120);
+      ImGui::InputInt("port", &export_port_);
       if (ImGui::Button("Start RTSP export")) {
-        Status st = app_->StartRtspExport(export_port_, "/cam");
+        Status st = app_->StartRtspExport(*sel, export_port_, "/cam");
         rtsp_msg_ = st.ok() ? "" : st.message();
       }
       if (!rtsp_msg_.empty())
-        ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "%s", rtsp_msg_.c_str());
+        ImGui::TextColored(kTextError, "%s", rtsp_msg_.c_str());
     } else {
-      if (ImGui::Button("Stop RTSP export")) app_->StopRtspExport();
-      ImGui::TextColored(ImVec4(0, 1, 0, 1), "%s", app_->RtspUrl().c_str());
+      if (ImGui::Button("Stop RTSP export")) app_->StopRtspExport(*sel);
+      ImGui::SameLine();
+      ImGui::TextColored(kTextLive, "%s", sel->rtsp->url().c_str());
     }
 #else
     ImGui::TextDisabled("built without gst-rtsp-server");

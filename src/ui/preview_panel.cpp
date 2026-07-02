@@ -65,19 +65,22 @@ void PreviewPanel::UpdateTile(AppController::Session& s, Tile& tile) {
 }
 
 void PreviewPanel::DrawTile(AppController::Session& s, Tile& tile,
-                            ImVec2 cell_min, ImVec2 cell_max) {
+                            ImVec2 cell_min, ImVec2 cell_max,
+                            bool selectable) {
   ImDrawList* dl = ImGui::GetWindowDrawList();
-  const bool selected = app_->selected_key() == s.key;
+  const bool selected = selectable && app_->selected_key() == s.key;
 
-  // Click/double-click target covering the whole cell.
+  // Click/double-click target covering the whole cell. Clicking the already-
+  // selected tile deselects it (Controls/Qualify fall back to the first
+  // running camera), so the highlight can be dismissed.
   ImGui::SetCursorScreenPos(cell_min);
   ImGui::PushID(s.id);
   ImGui::InvisibleButton("tile", ImVec2(cell_max.x - cell_min.x,
                                         cell_max.y - cell_min.y));
   if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0))
     solo_key_ = (solo_key_ == s.key) ? std::string() : s.key;
-  else if (ImGui::IsItemClicked(0))
-    app_->Select(s.key);
+  else if (selectable && ImGui::IsItemClicked(0))
+    app_->Select(selected ? std::string() : s.key);
   ImGui::PopID();
 
   const float header_h = ImGui::GetTextLineHeight() + 4.0f;
@@ -180,7 +183,7 @@ void PreviewPanel::Draw() {
       const ImVec2 cmin{origin.x + c * cw + 2, origin.y + r * ch + 2};
       const ImVec2 cmax{origin.x + (c + 1) * cw - 2,
                         origin.y + (r + 1) * ch - 2};
-      DrawTile(*shown[i], *tiles_[shown[i]->id], cmin, cmax);
+      DrawTile(*shown[i], *tiles_[shown[i]->id], cmin, cmax, n > 1);
     }
   }
   End();

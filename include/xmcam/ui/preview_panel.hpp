@@ -42,8 +42,10 @@ class PreviewPanel : public quickviz::Panel {
   };
 
   void UpdateTile(AppController::Session& s, Tile& tile);
+  // `selectable`: with a single visible tile the selection border is noise
+  // (nothing to disambiguate) and clicks don't toggle selection.
   void DrawTile(AppController::Session& s, Tile& tile, ImVec2 cell_min,
-                ImVec2 cell_max);
+                ImVec2 cell_max, bool selectable);
 
   AppController* app_;
   std::unordered_map<int, std::unique_ptr<Tile>> tiles_;  // by session id

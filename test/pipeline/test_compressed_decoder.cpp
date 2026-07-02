@@ -63,6 +63,13 @@ TEST(CompressedDecoder, RejectsUnsupportedFormat) {
 }
 
 TEST(CompressedDecoder, DecodesH264AccessUnits) {
+  // The AU generator needs an H.264 encoder (x264enc, plugins-ugly).
+  GstEnsureInit();
+  if (GstElementFactory* f = gst_element_factory_find("x264enc")) {
+    gst_object_unref(f);
+  } else {
+    GTEST_SKIP() << "x264enc not available - cannot generate test AUs";
+  }
   auto aus = MakeH264Aus(30);
   ASSERT_GE(aus.size(), 25u) << "encoder produced too few AUs";
 

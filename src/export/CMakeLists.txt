@@ -3,6 +3,9 @@
 set(XMCAM_EXPORT_SRCS
   config_writer.cpp
   config_reader.cpp)
+if(XMCAM_WITH_GSTREAMER)
+  list(APPEND XMCAM_EXPORT_SRCS file_sink.cpp)
+endif()
 if(XMCAM_WITH_RTSP_SERVER)
   list(APPEND XMCAM_EXPORT_SRCS rtsp_sink.cpp)
 endif()
@@ -22,9 +25,12 @@ endif()
 
 target_link_libraries(xmcam_export PUBLIC xmcam_core ${XMCAM_YAML_CPP_TARGET})
 
+if(XMCAM_WITH_GSTREAMER)
+  target_link_libraries(xmcam_export PUBLIC PkgConfig::GST)
+endif()
 if(XMCAM_WITH_RTSP_SERVER)
   # XMCAM_WITH_RTSP_SERVER is defined globally in the root CMake.
-  target_link_libraries(xmcam_export PUBLIC PkgConfig::GST_RTSP PkgConfig::GST)
+  target_link_libraries(xmcam_export PUBLIC PkgConfig::GST_RTSP)
 endif()
 
 add_library(xmcam::export ALIAS xmcam_export)

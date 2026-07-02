@@ -4,7 +4,9 @@
  */
 #include "xmcam/ui/export_panel.hpp"
 
+#include <cstdio>
 #include <cstring>
+#include <ctime>
 
 #include "imgui.h"
 
@@ -30,6 +32,7 @@ void ExportPanel::DrawRow(AppController::Session& s) {
     return;
 
   ImGui::PushID(s.key.c_str());
+  ImGui::TextDisabled("RTSP");
   // Settings are frozen while serving; stop the export to change them.
   if (serving) ImGui::BeginDisabled();
   FieldLabel("Interface");
@@ -59,6 +62,52 @@ void ExportPanel::DrawRow(AppController::Session& s) {
       if (all_if)
         ImGui::TextDisabled("bound to all interfaces - reachable via any "
                             "host IP");
+    }
+  }
+
+  // --- File recording (concurrent with RTSP thanks to the fanout) ---
+  ImGui::Spacing();
+  ImGui::TextDisabled("Record to file");
+  const bool recording = s.recorder && s.recorder->running();
+  if (recording) ImGui::BeginDisabled();
+  FieldLabel("Format");
+  const char* kFormats[] = {"Raw Y4M (bit-exact, large)",
+                            "Lossless MKV (FFV1)", "H.264 MKV"};
+  ImGui::Combo("##recfmt", &cfg.rec_format, kFormats, 3);
+  FieldLabel("Directory");
+  ImGui::InputText("##recdir", cfg.rec_dir, sizeof cfg.rec_dir);
+  if (recording) ImGui::EndDisabled();
+
+  if (!recording) {
+    if (AccentButton("  Start recording  ", kBtnStart)) {
+      const FileSink::Format fmt =
+          cfg.rec_format == 0   ? FileSink::Format::kY4m
+          : cfg.rec_format == 1 ? FileSink::Format::kFfv1Mkv
+                                : FileSink::Format::kH264Mkv;
+      // recordings/<key>_<timestamp>.<ext> — key sanitized for a filename.
+      std::string name = s.key;
+      for (auto& ch : name)
+        if (ch == '/' || ch == ':') ch = '_';
+      char ts[32];
+      std::time_t t = std::time(nullptr);
+      std::strftime(ts, sizeof ts, "%Y%m%d_%H%M%S", std::localtime(&t));
+      const std::string path = std::string(cfg.rec_dir) + "/" + name + "_" +
+                               ts + "." + FileSink::Extension(fmt);
+      Status st = app_->StartRecording(s, path, fmt);
+      cfg.rec_error = st.ok() ? "" : st.message();
+    }
+    if (!cfg.rec_error.empty())
+      StatusLine(kTextError, "ERROR", cfg.rec_error.c_str());
+  } else {
+    if (AccentButton("  Stop recording  ", kBtnStop)) {
+      app_->StopRecording(s);
+    } else {
+      const auto rst = s.recorder->stats();
+      StatusLine(kTextError, "REC", s.recorder->path().c_str());
+      ImGui::Bullet();
+      ImGui::Text("%llu frames written / %llu dropped",
+                  static_cast<unsigned long long>(rst.frames_written),
+                  static_cast<unsigned long long>(rst.frames_dropped));
     }
   }
   ImGui::PopID();

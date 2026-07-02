@@ -15,9 +15,13 @@
 #include <vector>
 
 #include "xmcam/control/control_set.hpp"
+#include "xmcam/core/fanout_sink.hpp"
 #include "xmcam/pipeline/v4l2_device.hpp"
 #include "xmcam/pipeline/v4l2_source.hpp"
 #include "xmcam/pipeline/video_source.hpp"
+#ifdef XMCAM_WITH_GSTREAMER
+#include "xmcam/export/file_sink.hpp"
+#endif
 #ifdef XMCAM_WITH_RTSP_SERVER
 #include "xmcam/export/rtsp_sink.hpp"
 #endif
@@ -61,9 +65,14 @@ class AppController {
     DisplayStats display_stats;
     int controls_epoch = 0;
     uint32_t last_generation = 0;
-    FrameSink* attached_sink = nullptr;
+    // Frame tee: RTSP export, file recorder and the qualification tap all
+    // consume concurrently through the fanout.
+    FanoutSink fanout;
 #ifdef XMCAM_WITH_RTSP_SERVER
     std::unique_ptr<RtspSink> rtsp;
+#endif
+#ifdef XMCAM_WITH_GSTREAMER
+    std::unique_ptr<FileSink> recorder;
 #endif
 
     bool IsRunning() const { return source && source->IsRunning(); }
@@ -120,12 +129,17 @@ class AppController {
     return s.source && s.source->Frames().TryPull(*out);
   }
 
-  // --- per-session tee + RTSP export ---
+  // --- per-session tee (fanout: multiple sinks at once) ---
   bool AttachFrameSink(Session& s, FrameSink* sink);
   void DetachFrameSink(Session& s, FrameSink* sink);
   Status StartRtspExport(Session& s, const std::string& address, int port,
                          const std::string& mount);
   void StopRtspExport(Session& s);
+#ifdef XMCAM_WITH_GSTREAMER
+  Status StartRecording(Session& s, const std::string& path,
+                        FileSink::Format format);
+  void StopRecording(Session& s);
+#endif
 
   // --- target-camera conveniences (Controls / Qualify panels) ---
   bool IsRunning() {

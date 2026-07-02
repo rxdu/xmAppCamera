@@ -51,13 +51,15 @@ AppController::Session* AppController::EnsureSession(SourceKind kind,
 
 void AppController::TeardownSession(Session& s) {
   StopRtspExport(s);
+#ifdef XMCAM_WITH_GSTREAMER
+  StopRecording(s);
+#endif
   if (s.source) {
-    if (s.attached_sink) s.source->SetFrameSink(nullptr);
+    s.source->SetFrameSink(nullptr);
     s.source->Stop();
     s.source->Close();
     s.source.reset();
   }
-  s.attached_sink = nullptr;
   s.controls.reset();
   s.ctrl_dev.reset();
   s.last_generation = 0;
@@ -189,17 +191,38 @@ void AppController::MaintainRecovery() {
 }
 
 bool AppController::AttachFrameSink(Session& s, FrameSink* sink) {
-  if (!s.source || s.attached_sink) return false;
-  s.attached_sink = sink;
-  s.source->SetFrameSink(sink);
+  if (!s.source) return false;
+  s.fanout.Add(sink);
+  s.source->SetFrameSink(&s.fanout);
   return true;
 }
 
 void AppController::DetachFrameSink(Session& s, FrameSink* sink) {
-  if (s.attached_sink != sink) return;
-  if (s.source) s.source->SetFrameSink(nullptr);
-  s.attached_sink = nullptr;
+  s.fanout.Remove(sink);
 }
+
+#ifdef XMCAM_WITH_GSTREAMER
+Status AppController::StartRecording(Session& s, const std::string& path,
+                                     FileSink::Format format) {
+  if (!s.source) return Err(ErrorCode::kInvalidArgument, "session not running");
+  StopRecording(s);
+  auto rec = std::make_unique<FileSink>();
+  const double fps =
+      s.kind == SourceKind::kV4l2 && s.config.fps > 0 ? s.config.fps : 30.0;
+  if (auto st = rec->Start(path, format, fps); !st.ok()) return st;
+  s.recorder = std::move(rec);
+  AttachFrameSink(s, s.recorder.get());
+  return Ok();
+}
+
+void AppController::StopRecording(Session& s) {
+  if (s.recorder) {
+    DetachFrameSink(s, s.recorder.get());
+    s.recorder->Stop();
+    s.recorder.reset();
+  }
+}
+#endif
 
 Status AppController::StartRtspExport(Session& s, const std::string& address,
                                       int port, const std::string& mount) {

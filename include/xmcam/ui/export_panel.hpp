@@ -1,9 +1,9 @@
 /*
  * @file export_panel.hpp
- * @brief RTSP re-export tab: lists every active camera/stream session with
- *        per-session bind interface, port and mount suffix, and an
- *        enable/disable toggle. Several sessions can export simultaneously
- *        (each hosts its own server).
+ * @brief Export tab: lists every active camera/stream session. Per session:
+ *        RTSP re-export (bind interface, port, mount suffix, enable/disable)
+ *        and file recording (raw Y4M / lossless FFV1 / H.264) — both can run
+ *        at once thanks to the frame fanout.
  *
  * Copyright (c) 2026 Ruixiang Du (rdu)
  */
@@ -31,6 +31,10 @@ class ExportPanel : public quickviz::Panel {
     int port = 0;                  // assigned on first sight
     char mount[64] = "/cam";       // URL suffix
     std::string error;
+    // File recording
+    int rec_format = 0;          // 0=raw y4m, 1=lossless mkv, 2=h264 mkv
+    char rec_dir[256] = "recordings";
+    std::string rec_error;
   };
   void DrawRow(AppController::Session& s);
 

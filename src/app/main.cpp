@@ -52,6 +52,20 @@ int main() {
       }
     }
   }
+  // Headless-test hook: record the selected session (y4m|ffv1|h264).
+  if (const char* fmt = std::getenv("XMCAM_AUTOREC")) {
+    if (AppController::Session* s = app.selected()) {
+      const FileSink::Format f = std::string(fmt) == "ffv1"
+                                     ? FileSink::Format::kFfv1Mkv
+                                 : std::string(fmt) == "h264"
+                                     ? FileSink::Format::kH264Mkv
+                                     : FileSink::Format::kY4m;
+      const std::string path =
+          std::string("recordings/autorec.") + FileSink::Extension(f);
+      if (auto st = app.StartRecording(*s, path, f); !st.ok())
+        XLOG_WARN("auto record: {}", st.message());
+    }
+  }
   // Headless-test hook: add a synthetic network-stream session so the tiled
   // preview can be exercised without a second physical camera.
   if (std::getenv("XMCAM_AUTOGST")) {

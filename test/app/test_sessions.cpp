@@ -5,6 +5,7 @@
 
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <chrono>
 #include <thread>
 
@@ -74,21 +75,34 @@ TEST(Sessions, SelectionFollowsAndOverrides) {
   app.StopAll();
 }
 
-TEST(Sessions, SinkSlotIsExclusivePerSession) {
-  struct NullSink : FrameSink {
-    void OnFrame(const VideoFrame&) override {}
+TEST(Sessions, FanoutDeliversToAllSinks) {
+  struct CountingSink : FrameSink {
+    std::atomic<int> n{0};
+    void OnFrame(const VideoFrame&) override { ++n; }
   };
   AppController app;
   ASSERT_TRUE(app.StartGst("net1", kTestPipeline).ok());
   AppController::Session* s = app.FindSession("net1");
 
-  NullSink a, b;
+  CountingSink a, b;
   EXPECT_TRUE(app.AttachFrameSink(*s, &a));
-  EXPECT_FALSE(app.AttachFrameSink(*s, &b));  // slot taken
-  app.DetachFrameSink(*s, &b);                // wrong sink: no-op
-  EXPECT_FALSE(app.AttachFrameSink(*s, &b));
+  EXPECT_TRUE(app.AttachFrameSink(*s, &b));  // concurrent sinks OK now
+
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(5);
+  while ((a.n.load() < 5 || b.n.load() < 5) &&
+         std::chrono::steady_clock::now() < deadline)
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  EXPECT_GE(a.n.load(), 5);
+  EXPECT_GE(b.n.load(), 5);
+
+  // Detached sinks stop receiving; the other keeps flowing.
   app.DetachFrameSink(*s, &a);
-  EXPECT_TRUE(app.AttachFrameSink(*s, &b));
+  const int a_after = a.n.load();
+  const int b_mark = b.n.load();
+  std::this_thread::sleep_for(std::chrono::milliseconds(300));
+  EXPECT_EQ(a.n.load(), a_after);
+  EXPECT_GT(b.n.load(), b_mark);
   app.StopAll();
 }
 

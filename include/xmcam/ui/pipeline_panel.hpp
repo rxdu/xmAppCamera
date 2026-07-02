@@ -1,7 +1,10 @@
 /*
  * @file pipeline_panel.hpp
- * @brief Network-stream composer: presets + editable raw GStreamer pipeline,
- *        Validate (parse-only) and Play/Stop.
+ * @brief Network-stream control. Simple mode: URL + latency, codec-agnostic
+ *        pipeline generated (decodebin3 — works for H.264/H.265/MJPEG cameras
+ *        alike). Advanced mode: raw GStreamer pipeline editing with Validate.
+ *        Live connection state (CONNECTING/LIVE/ERROR/EOS) surfaced from the
+ *        pipeline bus, with optional auto-reconnect.
  *
  * Copyright (c) 2026 Ruixiang Du (rdu)
  */
@@ -22,12 +25,17 @@ class PipelinePanel : public quickviz::Panel {
   void Draw() override;
 
  private:
+  std::string BuildSimplePipeline() const;
+  void Play(const std::string& pipeline);
+
   AppController* app_;
-  char buffer_[2048];
+  bool advanced_ = false;
+  char url_[512];
+  int latency_ms_ = 50;
+  bool auto_reconnect_ = true;
+  char buffer_[2048];  // advanced raw pipeline
   std::string validate_msg_;
   bool validate_ok_ = false;
-  std::string rtsp_msg_;  // last RTSP-export failure, shown in the panel
-  int export_port_ = 8554;
 };
 
 }  // namespace xmotion

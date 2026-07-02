@@ -4,6 +4,7 @@ add_library(xmcam_ui
   main_docking_panel.cpp
   preview_panel.cpp
   device_panel.cpp
+  export_panel.cpp
   control_panel.cpp
   pipeline_panel.cpp
   qualify_panel.cpp)

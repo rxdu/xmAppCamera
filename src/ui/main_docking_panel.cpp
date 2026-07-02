@@ -15,7 +15,8 @@ MainDockingPanel::MainDockingPanel(AppController* app)
       preview_(app),
       control_(app),
       pipeline_(app),
-      qualify_(app) {
+      qualify_(app),
+      export_(app) {
   this->SetAutoLayout(false);
   this->SetNoResize(true);
   this->SetNoMove(true);
@@ -60,6 +61,7 @@ void MainDockingPanel::Draw() {
       ImGui::DockBuilderDockWindow("Network Stream", left_top);
       ImGui::DockBuilderDockWindow("Controls", left_bottom);
       ImGui::DockBuilderDockWindow("Qualify", left_bottom);
+      ImGui::DockBuilderDockWindow("Export", left_bottom);
       ImGui::DockBuilderDockWindow("Preview", center);
       ImGui::DockBuilderFinish(dockspace_id_);
     }
@@ -71,6 +73,7 @@ void MainDockingPanel::Draw() {
   pipeline_.Draw();
   control_.Draw();
   qualify_.Draw();
+  export_.Draw();
   preview_.Draw();
 }
 

@@ -31,6 +31,9 @@ int main() {
   // Shift). Plain drag-to-dock is the expected behavior here.
   ImGui::GetIO().ConfigDockingWithShift = false;
   viewer.ApplyDarkColorScheme();
+  // Breathing room inside panels: keep content off the panel borders.
+  // (The root dock-host window opts out so the dockspace stays flush.)
+  ImGui::GetStyle().WindowPadding = ImVec2(10.0f, 8.0f);
 
   // One root panel fills the window and lays out the sidebar + preview.
   viewer.AddSceneObject(std::make_shared<MainDockingPanel>(&app));

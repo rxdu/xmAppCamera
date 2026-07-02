@@ -87,7 +87,10 @@ void ControlPanel::Draw() {
       if (!c.IsDisabled())
         label_col =
             std::max(label_col, ImGui::CalcTextSize(c.name.c_str()).x);
-    label_col = std::min(label_col + 12.0f,
+    // SameLine(x) is window-absolute: offset by the content start (window
+    // padding) so the label room is what we actually measured.
+    label_col = ImGui::GetCursorPosX() +
+                std::min(label_col + 12.0f,
                          ImGui::GetContentRegionAvail().x * 0.55f);
 
     bool changed = false;

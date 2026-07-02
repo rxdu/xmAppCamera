@@ -31,7 +31,11 @@ void MainDockingPanel::Draw() {
   ImGui::SetNextWindowPos(vp->WorkPos);
   ImGui::SetNextWindowSize(vp->WorkSize);
 
+  // The invisible dock host stays flush: the global WindowPadding is meant
+  // for the visible panels, not the dockspace container.
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
   Begin();
+  ImGui::PopStyleVar();
   {
     dockspace_id_ = ImGui::GetID("xmCamDockSpace");
     ImGui::DockSpace(dockspace_id_, ImVec2(0, 0), ImGuiDockNodeFlags_None);

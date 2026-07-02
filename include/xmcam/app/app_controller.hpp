@@ -123,7 +123,8 @@ class AppController {
   // --- per-session tee + RTSP export ---
   bool AttachFrameSink(Session& s, FrameSink* sink);
   void DetachFrameSink(Session& s, FrameSink* sink);
-  Status StartRtspExport(Session& s, int port, const std::string& mount);
+  Status StartRtspExport(Session& s, const std::string& address, int port,
+                         const std::string& mount);
   void StopRtspExport(Session& s);
 
   // --- target-camera conveniences (Controls / Qualify panels) ---

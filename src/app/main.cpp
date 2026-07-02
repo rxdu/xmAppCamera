@@ -46,7 +46,7 @@ int main() {
     // Optional second hook: also publish the selected source via RTSP.
     if (const char* port = std::getenv("XMCAM_AUTORTSP")) {
       if (AppController::Session* s = app.selected()) {
-        if (auto st = app.StartRtspExport(*s, std::atoi(port), "/cam");
+        if (auto st = app.StartRtspExport(*s, "0.0.0.0", std::atoi(port), "/cam");
             !st.ok())
           XLOG_WARN("auto rtsp export: {}", st.message());
       }

@@ -29,9 +29,11 @@ class RtspSink : public FrameSink {
   RtspSink() = default;
   ~RtspSink() override;
 
-  // Start serving rtsp://<host>:<port><mount> (mount like "/cam"). Idempotent
-  // stop via Stop().
-  Status Start(int port, const std::string& mount, int bitrate_kbps = 2000);
+  // Start serving rtsp://<address>:<port><mount> (mount like "/cam").
+  // `address` is the bind interface: "0.0.0.0" serves on all interfaces.
+  // Idempotent stop via Stop().
+  Status Start(const std::string& address, int port, const std::string& mount,
+               int bitrate_kbps = 2000);
   void Stop();
   bool running() const { return running_.load(); }
   const std::string& url() const { return url_; }
@@ -51,6 +53,7 @@ class RtspSink : public FrameSink {
   GstRTSPServer* server_ = nullptr;
   std::atomic<bool> running_{false};
   std::string url_;
+  std::string address_;
   std::string service_;
   std::string mount_;
   int bitrate_kbps_ = 2000;

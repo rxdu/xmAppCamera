@@ -201,13 +201,13 @@ void AppController::DetachFrameSink(Session& s, FrameSink* sink) {
   s.attached_sink = nullptr;
 }
 
-Status AppController::StartRtspExport(Session& s, int port,
-                                      const std::string& mount) {
+Status AppController::StartRtspExport(Session& s, const std::string& address,
+                                      int port, const std::string& mount) {
 #ifdef XMCAM_WITH_RTSP_SERVER
   if (!s.source) return Err(ErrorCode::kInvalidArgument, "session not running");
   StopRtspExport(s);
   s.rtsp = std::make_unique<RtspSink>();
-  if (auto st = s.rtsp->Start(port, mount); !st.ok()) {
+  if (auto st = s.rtsp->Start(address, port, mount); !st.ok()) {
     s.rtsp.reset();
     return st;
   }
@@ -219,6 +219,7 @@ Status AppController::StartRtspExport(Session& s, int port,
   }
   return Ok();
 #else
+  (void)address;
   (void)port;
   (void)mount;
   return Err(ErrorCode::kUnsupported, "RTSP export not built");

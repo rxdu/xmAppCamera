@@ -49,6 +49,9 @@ void ControlPanel::Draw() {
     bool changed = false;
     for (const auto& c : cs->controls()) {
       if (c.IsDisabled()) continue;
+      // Scope widget IDs by the control id: names can repeat across control
+      // classes on some drivers, which would collide ImGui IDs.
+      ImGui::PushID(static_cast<int>(c.id));
       const bool locked = c.IsInactive() || c.IsReadOnly();
       if (locked) ImGui::BeginDisabled();
 
@@ -69,11 +72,14 @@ void ControlPanel::Draw() {
           for (const auto& m : c.menu)
             if (m.value == val) cur = m.label.c_str();
           if (ImGui::BeginCombo(c.name.c_str(), cur)) {
+            int mi = 0;
             for (const auto& m : c.menu) {
+              ImGui::PushID(mi++);
               if (ImGui::Selectable(m.label.c_str(), m.value == val)) {
                 val = m.value;
                 changed |= cs->Set(c.id, val).ok();
               }
+              ImGui::PopID();
             }
             ImGui::EndCombo();
           }
@@ -95,6 +101,7 @@ void ControlPanel::Draw() {
         }
       }
       if (locked) ImGui::EndDisabled();
+      ImGui::PopID();
     }
 
     // A write may have flipped dependent controls' active state + values.

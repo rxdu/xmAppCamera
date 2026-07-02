@@ -33,7 +33,7 @@ int main(int argc, char** argv) {
     return 0;
   }
 
-  // args: [device] [yuyv|mjpeg] [WxH] [fps] [nframes]
+  // args: [device] [yuyv|mjpeg|h264] [WxH] [fps] [nframes]
   std::string device = argc > 1 ? argv[1] : devices.front().device;
   std::string fmt = argc > 2 ? argv[2] : "yuyv";
   int w = 640, h = 480;
@@ -44,7 +44,9 @@ int main(int argc, char** argv) {
   SourceDescriptor desc;
   desc.type = SourceDescriptor::Type::kV4l2;
   desc.device = device;
-  desc.format = (fmt == "mjpeg") ? PixelFormat::kMjpeg : PixelFormat::kYuyv;
+  desc.format = (fmt == "mjpeg")   ? PixelFormat::kMjpeg
+               : (fmt == "h264") ? PixelFormat::kH264
+                                 : PixelFormat::kYuyv;
   desc.width = w;
   desc.height = h;
   desc.fps = fps;

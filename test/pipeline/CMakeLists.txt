@@ -1,6 +1,7 @@
 set(XMCAM_PIPELINE_TEST_SRCS test_v4l2_enumerate.cpp)
 if(XMCAM_WITH_GSTREAMER)
-  list(APPEND XMCAM_PIPELINE_TEST_SRCS test_gst_source.cpp)
+  list(APPEND XMCAM_PIPELINE_TEST_SRCS test_gst_source.cpp
+                                       test_compressed_decoder.cpp)
 endif()
 
 add_executable(test_pipeline ${XMCAM_PIPELINE_TEST_SRCS})

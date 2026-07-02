@@ -7,7 +7,7 @@ if(XMCAM_WITH_GSTREAMER)
   list(APPEND XMCAM_PIPELINE_SRCS
     gst_util.cpp
     gst_source.cpp
-    gst_jpeg_decoder.cpp)
+    gst_compressed_decoder.cpp)
 endif()
 
 add_library(xmcam_pipeline ${XMCAM_PIPELINE_SRCS})

@@ -21,3 +21,8 @@ Project-visible record of mistakes and their corrections. Consult during intake 
 - **Pattern:** The GPU YUV shader shipped with an unnecessary V-flip; the verification screenshot was checked for correct colors but the upside-down orientation was missed — the user caught it.
 - **Correction:** When adding a V-flip in a render path, derive it end-to-end (upload row order → FBO v-coord → ImGui uv convention) instead of guessing, and verify screenshots against a scene with obvious up/down (floor/ceiling). Here: planes upload image-top at v=0 and ImGui shows v=0 at top → identity UVs, no flip.
 - **Context:** OpenGL FBO render-to-texture + ImGui::Image display path.
+
+### avdec_h264 frame-threading silently adds ~N-frames of latency
+- **Pattern:** The H.264 USB decode branch produced no output for the first ~11 frames and lagged thereafter; ffmpeg's frame-threading (default threads = cores) delays output by ~thread-count frames — 12 frames = 400ms at 30fps, fatal for live preview and invisible until measured (surfaced as per-frame decode timeouts).
+- **Correction:** Set `avdec_h264 max-threads=1` for low-latency pipelines; single-threaded H.264 decode outpaces camera rates at typical resolutions. Test decoders with a synthetic AU replay (videotestsrc ! x264enc) counting decoded-vs-timeout per push.
+- **Context:** GStreamer avdec/ffmpeg, live-preview latency.

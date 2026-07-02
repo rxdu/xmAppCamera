@@ -378,6 +378,24 @@ void V4l2Source::CaptureLoop() {
       VideoFrame decoded;
       const uint8_t* bytes =
           static_cast<const uint8_t*>(pool_->slot(buf.index).start);
+
+      // Tee the ORIGINAL camera bitstream to sinks before decoding, so a
+      // passthrough recorder saves it with zero re-encode. The fanout calls
+      // sinks synchronously (they copy what they keep) and every sink
+      // filters by format, so decoded-frame consumers ignore this one.
+      {
+        VideoFrame compressed;
+        compressed.width = neg_w_;
+        compressed.height = neg_h_;
+        compressed.format = neg_format_;  // kMjpeg / kH264
+        compressed.data = bytes;
+        compressed.data_size = buf.bytesused;
+        compressed.pts_ns = TimevalToNs(buf.timestamp);
+        compressed.seq = seq_;
+        compressed.hw_seq = buf.sequence;
+        EmitFrame(compressed);
+      }
+
       double decode_ms = 0.0;
       Status ds;
       {

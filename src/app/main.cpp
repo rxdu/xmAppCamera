@@ -55,10 +55,11 @@ int main() {
   // Headless-test hook: record the selected session (y4m|ffv1|h264).
   if (const char* fmt = std::getenv("XMCAM_AUTOREC")) {
     if (AppController::Session* s = app.selected()) {
-      const FileSink::Format f = std::string(fmt) == "ffv1"
-                                     ? FileSink::Format::kFfv1Mkv
-                                 : std::string(fmt) == "h264"
-                                     ? FileSink::Format::kH264Mkv
+      const std::string fs(fmt);
+      const FileSink::Format f = fs == "ffv1" ? FileSink::Format::kFfv1Mkv
+                                 : fs == "h264" ? FileSink::Format::kH264Mkv
+                                 : fs == "pass"
+                                     ? FileSink::Format::kPassthroughMkv
                                      : FileSink::Format::kY4m;
       const std::string path =
           std::string("recordings/autorec.") + FileSink::Extension(f);

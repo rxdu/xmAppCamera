@@ -1,9 +1,11 @@
 /*
  * @file file_sink.hpp
  * @brief Record a session's frames to disk without hidden processing. Formats:
- *          kY4m     — raw I420, bit-exact frames as delivered (large!)
- *          kFfv1Mkv — mathematically lossless FFV1 in Matroska
- *          kH264Mkv — visually-good H.264 in Matroska (long captures)
+ *          kH264Mkv        — visually-good H.264 in Matroska (default)
+ *          kPassthroughMkv — the CAMERA'S ORIGINAL bitstream (MJPEG/H.264)
+ *                            muxed as-is: zero decode, zero re-encode
+ *          kFfv1Mkv        — mathematically lossless FFV1 in Matroska
+ *          kY4m            — raw I420, bit-exact frames as displayed (large!)
  *        A writer thread with a bounded queue keeps the FrameSink contract
  *        (never block the capture thread); overruns drop frames and count.
  *
@@ -31,7 +33,7 @@ namespace xmotion {
 
 class FileSink : public FrameSink {
  public:
-  enum class Format { kY4m, kFfv1Mkv, kH264Mkv };
+  enum class Format { kH264Mkv, kPassthroughMkv, kFfv1Mkv, kY4m };
   static const char* Extension(Format f);  // "y4m" / "mkv"
 
   struct Stats {
@@ -57,16 +59,17 @@ class FileSink : public FrameSink {
   void OnFrame(const VideoFrame& frame) override;
 
  private:
-  struct Packed {  // tightly packed I420 payload
+  struct Packed {  // tightly packed I420, or a compressed bitstream frame
+    PixelFormat fmt = PixelFormat::kI420;
     int width = 0;
     int height = 0;
     std::vector<uint8_t> data;
   };
   void WriterLoop();
-  bool EnsurePipeline(int width, int height);
+  bool EnsurePipeline(const Packed& first);
 
   std::string path_;
-  Format format_ = Format::kY4m;
+  Format format_ = Format::kH264Mkv;
   double fps_ = 30.0;
 
   GstElement* pipeline_ = nullptr;

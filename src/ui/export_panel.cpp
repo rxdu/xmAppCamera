@@ -71,9 +71,11 @@ void ExportPanel::DrawRow(AppController::Session& s) {
   const bool recording = s.recorder && s.recorder->running();
   if (recording) ImGui::BeginDisabled();
   FieldLabel("Format");
-  const char* kFormats[] = {"Raw Y4M (bit-exact, large)",
-                            "Lossless MKV (FFV1)", "H.264 MKV"};
-  ImGui::Combo("##recfmt", &cfg.rec_format, kFormats, 3);
+  const char* kFormats[] = {"H.264 MKV (default)",
+                            "Passthrough MKV (camera bitstream, no re-encode)",
+                            "Lossless MKV (FFV1)",
+                            "Raw Y4M (bit-exact, large)"};
+  ImGui::Combo("##recfmt", &cfg.rec_format, kFormats, 4);
   FieldLabel("Directory");
   ImGui::InputText("##recdir", cfg.rec_dir, sizeof cfg.rec_dir);
   if (recording) ImGui::EndDisabled();
@@ -81,9 +83,20 @@ void ExportPanel::DrawRow(AppController::Session& s) {
   if (!recording) {
     if (AccentButton("  Start recording  ", kBtnStart)) {
       const FileSink::Format fmt =
-          cfg.rec_format == 0   ? FileSink::Format::kY4m
-          : cfg.rec_format == 1 ? FileSink::Format::kFfv1Mkv
-                                : FileSink::Format::kH264Mkv;
+          cfg.rec_format == 0   ? FileSink::Format::kH264Mkv
+          : cfg.rec_format == 1 ? FileSink::Format::kPassthroughMkv
+          : cfg.rec_format == 2 ? FileSink::Format::kFfv1Mkv
+                                : FileSink::Format::kY4m;
+      // Passthrough saves the camera's own bitstream — only meaningful for
+      // USB cameras running a compressed mode.
+      if (fmt == FileSink::Format::kPassthroughMkv &&
+          !(s.kind == AppController::SourceKind::kV4l2 &&
+            IsCompressed(s.config.format))) {
+        cfg.rec_error =
+            "passthrough needs a USB camera in MJPEG/H264 mode";
+        ImGui::PopID();
+        return;
+      }
       // recordings/<key>_<timestamp>.<ext> — key sanitized for a filename.
       std::string name = s.key;
       for (auto& ch : name)

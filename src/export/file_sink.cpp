@@ -36,37 +36,54 @@ Status FileSink::Start(const std::string& path, Format format, double fps) {
   running_.store(true);
   writer_ = std::thread(&FileSink::WriterLoop, this);
   XLOG_INFO("FileSink recording to {} ({})", path_,
-            format == Format::kY4m      ? "raw y4m"
-            : format == Format::kFfv1Mkv ? "ffv1 lossless"
-                                         : "h264");
+            format == Format::kY4m             ? "raw y4m"
+            : format == Format::kFfv1Mkv       ? "ffv1 lossless"
+            : format == Format::kPassthroughMkv ? "passthrough"
+                                                : "h264");
   return Ok();
 }
 
-bool FileSink::EnsurePipeline(int width, int height) {
+bool FileSink::EnsurePipeline(const Packed& first) {
   if (pipeline_) return true;
 
-  // The pipeline is created on the first frame (we need the geometry).
-  //   y4m : bit-exact raw I420 container, zero processing.
-  //   ffv1: mathematically lossless intra-frame codec.
-  //   h264: quality-oriented CRF-ish encode for long captures.
-  std::string encode;
-  switch (format_) {
-    case Format::kY4m: encode = "y4menc"; break;
-    case Format::kFfv1Mkv:
-      encode = "avenc_ffv1 ! matroskamux";
-      break;
-    case Format::kH264Mkv:
-      encode =
-          "x264enc speed-preset=fast tune=zerolatency bitrate=8000 ! "
-          "h264parse ! matroskamux";
-      break;
-  }
+  // The pipeline is created on the first frame (we need geometry/codec).
+  //   h264:        quality-oriented encode for long captures (default).
+  //   passthrough: mux the camera's own bitstream — zero decode/re-encode.
+  //   ffv1:        mathematically lossless intra-frame codec.
+  //   y4m:         bit-exact raw I420 container, zero processing.
   gchar* fps_frac = g_strdup_printf("%d/100", static_cast<int>(fps_ * 100));
-  gchar* desc = g_strdup_printf(
-      "appsrc name=src is-live=true block=true format=time do-timestamp=true "
-      "caps=video/x-raw,format=I420,width=%d,height=%d,framerate=%s ! "
-      "%s ! filesink location=\"%s\"",
-      width, height, fps_frac, encode.c_str(), path_.c_str());
+  gchar* desc = nullptr;
+  if (format_ == Format::kPassthroughMkv) {
+    const char* caps_and_parse =
+        first.fmt == PixelFormat::kH264
+            ? "caps=video/x-h264,stream-format=byte-stream,alignment=au,"
+              "width=%d,height=%d,framerate=%s ! h264parse"
+            : "caps=image/jpeg,width=%d,height=%d,framerate=%s ! jpegparse";
+    gchar* head = g_strdup_printf(caps_and_parse, first.width, first.height,
+                                  fps_frac);
+    desc = g_strdup_printf(
+        "appsrc name=src is-live=true block=true format=time "
+        "do-timestamp=true %s ! matroskamux ! filesink location=\"%s\"",
+        head, path_.c_str());
+    g_free(head);
+  } else {
+    std::string encode;
+    switch (format_) {
+      case Format::kY4m: encode = "y4menc"; break;
+      case Format::kFfv1Mkv: encode = "avenc_ffv1 ! matroskamux"; break;
+      default:
+        encode =
+            "x264enc speed-preset=fast tune=zerolatency bitrate=8000 ! "
+            "h264parse ! matroskamux";
+        break;
+    }
+    desc = g_strdup_printf(
+        "appsrc name=src is-live=true block=true format=time "
+        "do-timestamp=true "
+        "caps=video/x-raw,format=I420,width=%d,height=%d,framerate=%s ! "
+        "%s ! filesink location=\"%s\"",
+        first.width, first.height, fps_frac, encode.c_str(), path_.c_str());
+  }
   GError* err = nullptr;
   pipeline_ = gst_parse_launch(desc, &err);
   g_free(fps_frac);
@@ -86,13 +103,32 @@ bool FileSink::EnsurePipeline(int width, int height) {
 }
 
 void FileSink::OnFrame(const VideoFrame& f) {
-  if (!running_.load() || f.format != PixelFormat::kI420 || !f.valid()) return;
+  if (!running_.load() || !f.valid()) return;
 
-  // Tightly pack the (possibly strided) planes; the copy is the price of the
-  // never-block contract — the writer thread does the slow disk/encode work.
   Packed p;
+  p.fmt = f.format;
   p.width = f.width;
   p.height = f.height;
+
+  if (format_ == Format::kPassthroughMkv) {
+    // Passthrough wants the camera's compressed bitstream, nothing else.
+    if (!IsCompressed(f.format) || f.data_size == 0) return;
+    p.data.assign(f.data, f.data + f.data_size);
+    {
+      std::lock_guard<std::mutex> lk(mtx_);
+      if (queue_.size() >= kMaxQueue) {
+        ++stats_.frames_dropped;
+        return;
+      }
+      queue_.push_back(std::move(p));
+    }
+    cv_.notify_one();
+    return;
+  }
+
+  if (f.format != PixelFormat::kI420) return;
+  // Tightly pack the (possibly strided) planes; the copy is the price of the
+  // never-block contract — the writer thread does the slow disk/encode work.
   const int cw = (f.width + 1) / 2;
   const int ch = (f.height + 1) / 2;
   p.data.resize(static_cast<size_t>(f.width) * f.height +
@@ -132,7 +168,7 @@ void FileSink::WriterLoop() {
       queue_.pop_front();
     }
 
-    if (!EnsurePipeline(p.width, p.height)) {
+    if (!EnsurePipeline(p)) {
       running_.store(false);
       break;
     }

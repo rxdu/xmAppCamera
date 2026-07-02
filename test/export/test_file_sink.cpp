@@ -1,6 +1,8 @@
 // FileSink recording tests — synthetic I420 frames, no camera needed.
 #include "xmcam/export/file_sink.hpp"
 
+#include <gst/app/gstappsink.h>
+
 #include <gtest/gtest.h>
 
 #include <chrono>
@@ -83,5 +85,86 @@ TEST(FileSink, WritesLosslessMkv) {
 
   EXPECT_GE(sink.stats().frames_written, 15u);
   EXPECT_GT(FileSize(path), 1000);  // finalized container with content
+  std::remove(path.c_str());
+}
+
+namespace {
+
+// Encode n JPEG frames in-process (gst jpegenc) for passthrough tests.
+std::vector<std::vector<uint8_t>> MakeJpegs(int n, int w, int h) {
+  if (!gst_is_initialized()) gst_init(nullptr, nullptr);
+  std::vector<std::vector<uint8_t>> out;
+  gchar* desc = g_strdup_printf(
+      "videotestsrc num-buffers=%d ! video/x-raw,width=%d,height=%d,"
+      "framerate=30/1 ! jpegenc ! appsink name=sink sync=false",
+      n, w, h);
+  GError* err = nullptr;
+  GstElement* p = gst_parse_launch(desc, &err);
+  g_free(desc);
+  if (!p || err) {
+    if (err) g_error_free(err);
+    return out;
+  }
+  GstElement* sink = gst_bin_get_by_name(GST_BIN(p), "sink");
+  gst_element_set_state(p, GST_STATE_PLAYING);
+  while (GstSample* s = gst_app_sink_try_pull_sample(GST_APP_SINK(sink),
+                                                     2 * GST_SECOND)) {
+    GstBuffer* b = gst_sample_get_buffer(s);
+    GstMapInfo map;
+    if (gst_buffer_map(b, &map, GST_MAP_READ)) {
+      out.emplace_back(map.data, map.data + map.size);
+      gst_buffer_unmap(b, &map);
+    }
+    gst_sample_unref(s);
+  }
+  gst_element_set_state(p, GST_STATE_NULL);
+  gst_object_unref(sink);
+  gst_object_unref(p);
+  return out;
+}
+
+VideoFrame MakeCompressedFrame(const std::vector<uint8_t>& jpeg, int w,
+                               int h) {
+  VideoFrame f;
+  f.width = w;
+  f.height = h;
+  f.format = PixelFormat::kMjpeg;
+  f.data = jpeg.data();
+  f.data_size = jpeg.size();
+  return f;
+}
+
+}  // namespace
+
+TEST(FileSink, PassthroughMuxesCameraBitstreamWithoutReencode) {
+  const std::string path = testing::TempDir() + "xmcam_pass.mkv";
+  std::remove(path.c_str());
+
+  auto jpegs = MakeJpegs(20, 320, 240);
+  ASSERT_GE(jpegs.size(), 20u);
+  size_t payload = 0;
+  for (const auto& j : jpegs) payload += j.size();
+
+  FileSink sink;
+  ASSERT_TRUE(
+      sink.Start(path, FileSink::Format::kPassthroughMkv, 30.0).ok());
+  for (const auto& j : jpegs) {
+    sink.OnFrame(MakeCompressedFrame(j, 320, 240));
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+  // Decoded frames must be ignored by a passthrough recorder.
+  VideoFrame decoded = MakeFrame(320, 240, 128);
+  sink.OnFrame(decoded);
+  sink.Stop();
+
+  EXPECT_EQ(sink.stats().frames_written, 20u);
+
+  // Zero-re-encode heuristic: the file contains the original bitstream, so
+  // its size is the JPEG payload plus small mux overhead — nowhere near a
+  // re-encode (different size class) or raw (i420 would be ~2.3MB).
+  const long size = FileSize(path);
+  ASSERT_GT(size, 0);
+  EXPECT_GE(size, static_cast<long>(payload));
+  EXPECT_LE(size, static_cast<long>(payload) + 100000);
   std::remove(path.c_str());
 }

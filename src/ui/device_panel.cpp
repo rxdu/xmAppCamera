@@ -80,8 +80,8 @@ bool DevicePanel::DrawSlot(Slot& slot, int index) {
   ImGui::Indent();
 
   // Device picker: enumerated devices not claimed by another slot.
-  if (ImGui::BeginCombo("Device##pick",
-                        dev ? DeviceLabel(*dev).c_str() : "-")) {
+  FieldLabel("Device");
+  if (ImGui::BeginCombo("##device", dev ? DeviceLabel(*dev).c_str() : "-")) {
     int di = 0;
     for (const auto& d : app_->devices()) {
       if (ClaimedByOther(d.device, index)) continue;
@@ -106,7 +106,8 @@ bool DevicePanel::DrawSlot(Slot& slot, int index) {
     if (slot.fmt >= static_cast<int>(caps.formats.size())) slot.fmt = 0;
     const auto& fmt = caps.formats[slot.fmt];
 
-    if (ImGui::BeginCombo("Format", ToString(fmt.format))) {
+    FieldLabel("Format");
+    if (ImGui::BeginCombo("##format", ToString(fmt.format))) {
       for (int i = 0; i < static_cast<int>(caps.formats.size()); ++i) {
         ImGui::PushID(i);
         if (ImGui::Selectable(ToString(caps.formats[i].format),
@@ -127,7 +128,8 @@ bool DevicePanel::DrawSlot(Slot& slot, int index) {
 
       char lbl[32];
       snprintf(lbl, sizeof lbl, "%dx%d", sz.width, sz.height);
-      if (ImGui::BeginCombo("Size", lbl)) {
+      FieldLabel("Size");
+      if (ImGui::BeginCombo("##size", lbl)) {
         for (int i = 0; i < static_cast<int>(fmt.sizes.size()); ++i) {
           char l2[32];
           snprintf(l2, sizeof l2, "%dx%d", fmt.sizes[i].width,
@@ -147,7 +149,8 @@ bool DevicePanel::DrawSlot(Slot& slot, int index) {
         sel_fps = sz.fps[slot.fps];
         char lbl2[24];
         snprintf(lbl2, sizeof lbl2, "%.0f fps", sel_fps);
-        if (ImGui::BeginCombo("FPS", lbl2)) {
+        FieldLabel("FPS");
+        if (ImGui::BeginCombo("##fps", lbl2)) {
           for (int i = 0; i < static_cast<int>(sz.fps.size()); ++i) {
             char l3[24];
             snprintf(l3, sizeof l3, "%.0f fps", sz.fps[i]);
@@ -225,6 +228,8 @@ void DevicePanel::Draw() {
     }
     if (ImGui::Button("Refresh")) app_->RefreshDevices();
     ImGui::SameLine();
+    if (AccentButton("+ Add Camera", kBtnStart)) slots_.emplace_back();
+    ImGui::SameLine();
     ImGui::TextDisabled("%zu running", app_->RunningCount());
     ImGui::Separator();
 
@@ -238,8 +243,6 @@ void DevicePanel::Draw() {
       }
     }
 
-    ImGui::Spacing();
-    if (AccentButton(" + Add Camera ", kBtnStart)) slots_.emplace_back();
   }
   End();
 }

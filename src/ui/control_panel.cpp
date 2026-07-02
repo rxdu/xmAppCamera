@@ -6,6 +6,7 @@
 
 #include "imgui.h"
 
+#include "xmcam/ui/widgets.hpp"
 #include "xmsigma/logging/xlogger.hpp"
 
 namespace xmotion {
@@ -37,7 +38,8 @@ void ControlPanel::Draw() {
     for (auto& s : app_->sessions())
       if (s->controls) ++n_cams;
     if (n_cams > 1) {
-      if (ImGui::BeginCombo("Camera",
+      FieldLabel("Camera");
+      if (ImGui::BeginCombo("##camera",
                             target ? target->label.c_str() : "-")) {
         for (auto& s : app_->sessions()) {
           if (!s->controls) continue;

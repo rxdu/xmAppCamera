@@ -34,6 +34,16 @@ inline const ImVec4 kTextPending{1.0f, 0.75f, 0.25f, 1.0f};
 inline const ImVec4 kTextError{1.0f, 0.4f, 0.4f, 1.0f};
 inline const ImVec4 kTextIdle{0.55f, 0.55f, 0.55f, 1.0f};
 
+// Left-side field label (GUI convention; ImGui defaults to right labels):
+// draws the label, then aligns the next widget at a fixed column taking the
+// remaining width. Use with "##id" widget labels to suppress the right label.
+inline void FieldLabel(const char* text, float field_x = 80.0f) {
+  ImGui::AlignTextToFramePadding();
+  ImGui::TextUnformatted(text);
+  ImGui::SameLine(field_x);
+  ImGui::SetNextItemWidth(-1);
+}
+
 // Status line with a drawn indicator dot (the bundled font has no U+25CF
 // glyph, so the dot is rendered via the draw list): `(o) LABEL  detail`.
 inline void StatusLine(const ImVec4& color, const char* label,

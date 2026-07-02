@@ -109,6 +109,19 @@ void ControlPanel::Draw() {
       if (locked) ImGui::BeginDisabled();
 
       FieldLabel(c.name.c_str(), label_col);
+      // Hovering the label explains the range and why a control is locked.
+      char tip[160];
+      if (locked)
+        snprintf(tip, sizeof tip,
+                 "%s\nLocked: an automatic mode owns this control -\n"
+                 "switch the related Auto setting to manual to unlock",
+                 c.name.c_str());
+      else
+        snprintf(tip, sizeof tip, "%s\nrange %lld..%lld, default %lld",
+                 c.name.c_str(), static_cast<long long>(c.minimum),
+                 static_cast<long long>(c.maximum),
+                 static_cast<long long>(c.default_value));
+      ItemTip(tip);
       int64_t& val = values_[c.id];
       switch (c.type) {
         case ControlType::kBoolean: {

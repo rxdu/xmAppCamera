@@ -168,6 +168,15 @@ void PreviewPanel::Draw() {
       shown = live;
     }
 
+    // Gesture hints: the tile interactions are otherwise invisible.
+    if (live.size() > 1) {
+      if (!solo_key_.empty())
+        Caption("double-click: back to grid");
+      else
+        Caption("click: select (drives Controls/Qualify/Export) - "
+                "double-click: solo");
+    }
+
     // Auto grid: cols = ceil(sqrt(n)).
     const int n = static_cast<int>(shown.size());
     const int cols = static_cast<int>(std::ceil(std::sqrt(n)));

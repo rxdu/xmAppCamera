@@ -38,10 +38,14 @@ void ExportPanel::DrawRow(AppController::Session& s) {
   FieldLabel("Interface");
   ImGui::InputTextWithHint("##addr", "0.0.0.0 (all interfaces)", cfg.address,
                            sizeof cfg.address);
+  ItemTip("Network interface to serve on. 0.0.0.0 = every interface;\n"
+          "use a specific IP to restrict (e.g. an internal robot network)");
   FieldLabel("Port");
   ImGui::InputInt("##port", &cfg.port);
-  FieldLabel("Suffix");
+  ItemTip("TCP port for this stream's RTSP server (each export gets its own)");
+  FieldLabel("Path");
   ImGui::InputText("##mount", cfg.mount, sizeof cfg.mount);
+  ItemTip("URL path: /cam serves rtsp://<interface>:<port>/cam");
   if (serving) ImGui::EndDisabled();
 
   if (!serving) {
@@ -76,8 +80,15 @@ void ExportPanel::DrawRow(AppController::Session& s) {
                             "Lossless MKV (FFV1)",
                             "Raw Y4M (bit-exact, large)"};
   ImGui::Combo("##recfmt", &cfg.rec_format, kFormats, 4);
+  ItemTip("H.264: small files, everyday captures (default)\n"
+          "Passthrough: the camera's own bitstream, zero re-encode -\n"
+          "  the strongest fidelity for USB cameras in MJPEG/H264 mode\n"
+          "Lossless FFV1: mathematically lossless from decoded frames\n"
+          "Raw Y4M: bit-exact uncompressed - huge files (~100+ MB/s)");
   FieldLabel("Directory");
   ImGui::InputText("##recdir", cfg.rec_dir, sizeof cfg.rec_dir);
+  ItemTip("Output folder (created if missing); files are named\n"
+          "<source>_<timestamp> automatically");
   if (recording) ImGui::EndDisabled();
 
   if (!recording) {
@@ -135,7 +146,9 @@ void ExportPanel::Draw() {
 #ifndef XMCAM_WITH_RTSP_SERVER
     ImGui::TextDisabled("built without gst-rtsp-server");
 #else
-    ImGui::TextWrapped("Re-export active sources as RTSP/H.264 streams.");
+    Caption("Share or save what a source is capturing: serve it as an RTSP "
+            "stream on the network, or record it to a file - both can run "
+            "at the same time.");
     ImGui::Separator();
 
     bool any = false;

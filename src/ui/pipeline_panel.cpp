@@ -110,14 +110,19 @@ bool PipelinePanel::DrawSlot(Slot& slot, int index) {
     FieldLabel("URL");
     ImGui::InputTextWithHint("##url", "rtsp://user:pass@host:554/stream",
                              slot.url, sizeof slot.url);
+    ItemTip("Stream address. Any codec works (H.264/H.265/MJPEG) -\n"
+            "the right decoder is picked automatically");
     FieldLabel("Latency");
     ImGui::SliderInt("##latency", &slot.latency_ms, 0, 500, "%d ms");
+    ItemTip("Network jitter buffer: lower = less delay, higher = smoother\n"
+            "on flaky networks");
     FieldLabel("Reconnect");
     if (ImGui::Checkbox("##reconn", &slot.auto_reconnect)) {
       if (gs)
         if (auto* src = dynamic_cast<GstSource*>(gs->source.get()))
           src->SetAutoReconnect(slot.auto_reconnect);
     }
+    ItemTip("Automatically retry (with backoff) when the stream drops");
     wanted = slot.url[0] ? BuildSimplePipeline(slot) : std::string();
   } else {
     ImGui::TextWrapped(
@@ -204,6 +209,7 @@ void PipelinePanel::Draw() {
     ImGui::TextDisabled("built without GStreamer support");
 #else
     if (AccentButton("+ Add Stream", kBtnStart)) AddSlot();
+    ItemTip("Add another network-stream block (RTSP/UDP/HTTP source)");
     ImGui::Separator();
 
     for (int i = 0; i < static_cast<int>(slots_.size());) {

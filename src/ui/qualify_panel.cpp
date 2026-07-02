@@ -14,6 +14,7 @@
 #include "imgui.h"
 
 #include "xmcam/qualify/qual_checks.hpp"
+#include "xmcam/ui/widgets.hpp"
 #include "xmcam/qualify/qual_report.hpp"
 #include "xmsigma/logging/xlogger.hpp"
 
@@ -369,20 +370,32 @@ void QualifyPanel::Draw() {
       return;
     }
 
+    Caption("Production-readiness checks for a camera: verifies controls "
+            "really work, timing is stable, and streaming survives stress - "
+            "then exports a per-unit report.");
     if (AppController::Session* sel = app_->SelectedCamera())
       ImGui::TextDisabled("target: %s", sel->label.c_str());
 
     const bool busy = worker_busy_.load();
     if (busy) ImGui::BeginDisabled();
     if (ImGui::Button("Run automated checks")) StartAutomatedRun();
+    ItemTip("~3 min hands-off: platform/firmware identity, control lock &\n"
+            "effect verification, timestamp stability, USB link audit,\n"
+            "open/close stress and a sustained soak");
     ImGui::SameLine();
     ImGui::SetNextItemWidth(90);
     ImGui::InputInt("soak s", &soak_s_);
+    ItemTip("Duration of the sustained-throughput soak at the end of the\n"
+            "automated run (default 120s)");
     if (ImGui::Button("Power-cycle identity check"))
       StartPowerCycleCheck(false);
+    ItemTip("You unplug/replug the camera mid-check; verifies the image\n"
+            "comes back IDENTICAL (fixed scene required)");
     ImGui::SameLine();
     if (ImGui::Button("Disconnect recovery check"))
       StartPowerCycleCheck(true);
+    ItemTip("You unplug/replug the camera mid-check; measures how fast\n"
+            "streaming recovers automatically");
     if (busy) ImGui::EndDisabled();
     if (busy) {
       ImGui::SameLine();

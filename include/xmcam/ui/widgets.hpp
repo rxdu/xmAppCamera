@@ -34,6 +34,20 @@ inline const ImVec4 kTextPending{1.0f, 0.75f, 0.25f, 1.0f};
 inline const ImVec4 kTextError{1.0f, 0.4f, 0.4f, 1.0f};
 inline const ImVec4 kTextIdle{0.55f, 0.55f, 0.55f, 1.0f};
 
+// Hover tooltip for the last item — delayed, so it never nags.
+inline void ItemTip(const char* text) {
+  if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal |
+                           ImGuiHoveredFlags_AllowWhenDisabled))
+    ImGui::SetTooltip("%s", text);
+}
+
+// Dimmed single-line caption (panel purpose / gesture hints).
+inline void Caption(const char* text) {
+  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.55f, 0.55f, 1.0f));
+  ImGui::TextWrapped("%s", text);
+  ImGui::PopStyleColor();
+}
+
 // Left-side field label (GUI convention; ImGui defaults to right labels):
 // draws the label, then aligns the next widget at a fixed column taking the
 // remaining width. Use with "##id" widget labels to suppress the right label.

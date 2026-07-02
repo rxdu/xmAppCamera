@@ -4,6 +4,7 @@
  */
 #include "xmcam/ui/device_panel.hpp"
 
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 
@@ -97,6 +98,8 @@ bool DevicePanel::DrawSlot(Slot& slot, int index) {
     }
     ImGui::EndCombo();
   }
+  ItemTip("Which physical camera this block drives (cameras claimed by\n"
+          "other blocks are hidden)");
 
   if (!dev) {
     ImGui::TextDisabled("no unclaimed camera available - plug one in and "
@@ -119,6 +122,8 @@ bool DevicePanel::DrawSlot(Slot& slot, int index) {
       }
       ImGui::EndCombo();
     }
+    ItemTip("Pixel format from the camera. MJPEG/H264 reach high fps\n"
+            "(decoded on the fly); YUYV is raw but rate-limited by USB");
 
     if (fmt.sizes.empty()) {
       ImGui::TextDisabled("selected format exposes no frame sizes");
@@ -182,16 +187,36 @@ bool DevicePanel::DrawSlot(Slot& slot, int index) {
 
       if (!running) {
         if (AccentButton("  Start  ", kBtnStart)) start_this();
+        ItemTip("Start streaming with the settings above");
       } else {
         if (dirty) {
           if (AccentButton("  Apply  ", kBtnApply)) start_this();
+          ItemTip("Restart the stream with the changed settings");
           ImGui::SameLine();
         }
         if (AccentButton("  Stop  ", kBtnStop))
           app_->StopSession(dev->device);
+        ItemTip("Stop this camera's stream");
       }
       ImGui::SameLine();
-      if (ImGui::Button("Remove")) keep = false;
+      // Removing a LIVE camera asks first; an idle block just goes away.
+      if (ImGui::Button("Remove")) {
+        if (running)
+          ImGui::OpenPopup("confirm_remove");
+        else
+          keep = false;
+      }
+      ItemTip("Remove this camera block (stops its stream)");
+      if (ImGui::BeginPopup("confirm_remove")) {
+        ImGui::TextUnformatted("This camera is LIVE. Stop and remove?");
+        if (AccentButton(" Stop & remove ", kBtnStop)) {
+          keep = false;
+          ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+      }
 
       // Status + live stats for this slot's camera.
       session = app_->FindSession(dev->device);
@@ -222,13 +247,22 @@ bool DevicePanel::DrawSlot(Slot& slot, int index) {
 void DevicePanel::Draw() {
   Begin();
   {
-    if (!enumerated_) {
+    // Auto-refresh the device list every few seconds so a newly plugged
+    // camera appears without hunting for the button.
+    using Clock = std::chrono::steady_clock;
+    static Clock::time_point last_scan{};
+    if (!enumerated_ || Clock::now() - last_scan > std::chrono::seconds(3)) {
       app_->RefreshDevices();
+      last_scan = Clock::now();
       enumerated_ = true;
     }
     if (ImGui::Button("Refresh")) app_->RefreshDevices();
+    ItemTip("Re-scan /dev/video* now (the list also refreshes automatically\n"
+            "every few seconds)");
     ImGui::SameLine();
     if (AccentButton("+ Add Camera", kBtnStart)) slots_.emplace_back();
+    ItemTip("Add another camera block to run a second camera alongside\n"
+            "this one - each has its own settings and stream");
     ImGui::SameLine();
     ImGui::TextDisabled("%zu running", app_->RunningCount());
     ImGui::Separator();

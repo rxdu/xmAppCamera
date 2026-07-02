@@ -14,10 +14,6 @@
 #endif
 
 namespace xmotion {
-namespace {
-constexpr const char* kGstKey = "network";
-}  // namespace
-
 AppController::~AppController() { StopAll(); }
 
 const std::vector<DeviceInfo>& AppController::RefreshDevices() {
@@ -116,9 +112,10 @@ Status AppController::StartV4l2(const std::string& device, PixelFormat fmt,
   return Ok();
 }
 
-Status AppController::StartGst(const std::string& pipeline) {
+Status AppController::StartGst(const std::string& key,
+                               const std::string& pipeline) {
 #ifdef XMCAM_WITH_GSTREAMER
-  Session* s = EnsureSession(SourceKind::kGst, kGstKey);
+  Session* s = EnsureSession(SourceKind::kGst, key);
   auto src = std::make_unique<GstSource>();
   SourceDescriptor desc;
   desc.type = SourceDescriptor::Type::kGstreamer;
@@ -127,10 +124,11 @@ Status AppController::StartGst(const std::string& pipeline) {
   if (auto st = src->Start(); !st.ok()) return st;
   s->source = std::move(src);
   s->pipeline = pipeline;
-  s->label = "network stream";
-  Select(kGstKey);
+  if (s->label.empty()) s->label = key;
+  Select(key);
   return Ok();
 #else
+  (void)key;
   (void)pipeline;
   return Err(ErrorCode::kUnsupported, "GStreamer support not built");
 #endif

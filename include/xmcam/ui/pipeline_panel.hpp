@@ -1,10 +1,11 @@
 /*
  * @file pipeline_panel.hpp
- * @brief Network-stream control. Simple mode: URL + latency, codec-agnostic
- *        pipeline generated (decodebin3 — works for H.264/H.265/MJPEG cameras
- *        alike). Advanced mode: raw GStreamer pipeline editing with Validate.
- *        Live connection state (CONNECTING/LIVE/ERROR/EOS) surfaced from the
- *        pipeline bus, with optional auto-reconnect.
+ * @brief Network-stream slot manager (mirrors the camera slots): starts with
+ *        one stream block; "+ Add Stream" appends more; each slot has Simple
+ *        (URL + latency, codec-agnostic decodebin3 pipeline) and Advanced
+ *        (raw pipeline) modes, stateful Play/Apply/Stop + Remove, and live
+ *        connection state (CONNECTING/LIVE/ERROR/EOS) from the pipeline bus
+ *        with optional auto-reconnect.
  *
  * Copyright (c) 2026 Ruixiang Du (rdu)
  */
@@ -12,6 +13,7 @@
 #define XMCAM_UI_PIPELINE_PANEL_HPP
 
 #include <string>
+#include <vector>
 
 #include "viewer/panel.hpp"
 
@@ -25,17 +27,26 @@ class PipelinePanel : public quickviz::Panel {
   void Draw() override;
 
  private:
-  std::string BuildSimplePipeline() const;
-  void Play(const std::string& pipeline);
+  struct Slot {
+    std::string key;  // session key ("net<N>")
+    bool advanced = false;
+    char url[512] = "";
+    int latency_ms = 50;
+    bool auto_reconnect = true;
+    char buffer[2048] = "";  // advanced raw pipeline
+    std::string validate_msg;
+    bool validate_ok = false;
+  };
+
+  void AddSlot();
+  // Returns false if the slot's Remove button was pressed.
+  bool DrawSlot(Slot& slot, int index);
+  static std::string BuildSimplePipeline(const Slot& slot);
+  void Play(Slot& slot, const std::string& pipeline);
 
   AppController* app_;
-  bool advanced_ = false;
-  char url_[512];
-  int latency_ms_ = 50;
-  bool auto_reconnect_ = true;
-  char buffer_[2048];  // advanced raw pipeline
-  std::string validate_msg_;
-  bool validate_ok_ = false;
+  std::vector<Slot> slots_;
+  int next_key_ = 1;
 };
 
 }  // namespace xmotion

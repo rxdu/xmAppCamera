@@ -80,8 +80,9 @@ class AppController {
   // Create (or restart, if this device already has a session) and select it.
   Status StartV4l2(const std::string& device, PixelFormat fmt, int width,
                    int height, double fps);
-  // The single network-stream session (keyed "network").
-  Status StartGst(const std::string& pipeline);
+  // Network-stream sessions are keyed by the caller (e.g. "net1", "net2"),
+  // so several streams can run side by side like camera slots.
+  Status StartGst(const std::string& key, const std::string& pipeline);
   void StopSession(const std::string& key);
   void StopAll();
   Status StartFirstDevice();  // demo/headless-test convenience

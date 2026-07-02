@@ -56,6 +56,7 @@ int main() {
   // preview can be exercised without a second physical camera.
   if (std::getenv("XMCAM_AUTOGST")) {
     if (auto st = app.StartGst(
+            "net1",
             "videotestsrc is-live=true pattern=smpte ! "
             "video/x-raw,width=640,height=480,framerate=30/1 ! videoconvert "
             "! video/x-raw,format=I420 ! "

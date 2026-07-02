@@ -21,14 +21,14 @@ constexpr const char* kTestPipeline =
 
 TEST(Sessions, GstSessionLifecycle) {
   AppController app;
-  ASSERT_TRUE(app.StartGst(kTestPipeline).ok());
+  ASSERT_TRUE(app.StartGst("net1", kTestPipeline).ok());
 
   ASSERT_EQ(app.sessions().size(), 1u);
-  AppController::Session* s = app.FindSession("network");
+  AppController::Session* s = app.FindSession("net1");
   ASSERT_NE(s, nullptr);
   EXPECT_TRUE(s->IsRunning());
   EXPECT_EQ(app.RunningCount(), 1u);
-  EXPECT_EQ(app.selected_key(), "network");
+  EXPECT_EQ(app.selected_key(), "net1");
   EXPECT_EQ(s->pipeline, kTestPipeline);
 
   // Frames flow through the session.
@@ -43,7 +43,7 @@ TEST(Sessions, GstSessionLifecycle) {
   EXPECT_TRUE(got);
   EXPECT_EQ(f.width, 320);
 
-  app.StopSession("network");
+  app.StopSession("net1");
   EXPECT_EQ(app.sessions().size(), 0u);
   EXPECT_EQ(app.RunningCount(), 0u);
   EXPECT_EQ(app.selected(), nullptr);
@@ -51,25 +51,25 @@ TEST(Sessions, GstSessionLifecycle) {
 
 TEST(Sessions, RestartInPlaceKeepsSingleSession) {
   AppController app;
-  ASSERT_TRUE(app.StartGst(kTestPipeline).ok());
-  const int id_before = app.FindSession("network")->id;
+  ASSERT_TRUE(app.StartGst("net1", kTestPipeline).ok());
+  const int id_before = app.FindSession("net1")->id;
 
   // Starting the same key again restarts in place (Apply), no new session.
-  ASSERT_TRUE(app.StartGst(kTestPipeline).ok());
+  ASSERT_TRUE(app.StartGst("net1", kTestPipeline).ok());
   ASSERT_EQ(app.sessions().size(), 1u);
-  EXPECT_EQ(app.FindSession("network")->id, id_before);
+  EXPECT_EQ(app.FindSession("net1")->id, id_before);
   app.StopAll();
 }
 
 TEST(Sessions, SelectionFollowsAndOverrides) {
   AppController app;
-  ASSERT_TRUE(app.StartGst(kTestPipeline).ok());
-  EXPECT_EQ(app.selected_key(), "network");
+  ASSERT_TRUE(app.StartGst("net1", kTestPipeline).ok());
+  EXPECT_EQ(app.selected_key(), "net1");
 
   app.Select("nonexistent");
   EXPECT_EQ(app.selected(), nullptr);  // selection of a gone key is harmless
 
-  app.Select("network");
+  app.Select("net1");
   ASSERT_NE(app.selected(), nullptr);
   app.StopAll();
 }
@@ -79,8 +79,8 @@ TEST(Sessions, SinkSlotIsExclusivePerSession) {
     void OnFrame(const VideoFrame&) override {}
   };
   AppController app;
-  ASSERT_TRUE(app.StartGst(kTestPipeline).ok());
-  AppController::Session* s = app.FindSession("network");
+  ASSERT_TRUE(app.StartGst("net1", kTestPipeline).ok());
+  AppController::Session* s = app.FindSession("net1");
 
   NullSink a, b;
   EXPECT_TRUE(app.AttachFrameSink(*s, &a));

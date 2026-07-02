@@ -21,147 +21,199 @@ std::string NodeName(const std::string& device) {
   return slash == std::string::npos ? device : device.substr(slash + 1);
 }
 
+std::string DeviceLabel(const DeviceInfo& d) {
+  return d.card + " (" + NodeName(d.device) + ")";
+}
+
 }  // namespace
 
 DevicePanel::DevicePanel(AppController* app)
     : quickviz::Panel("Device"), app_(app) {
   this->SetAutoLayout(false);
+  slots_.emplace_back();  // start with one camera block
 }
 
-void DevicePanel::DrawDeviceBlock(const DeviceInfo& dev, int index) {
-  AppController::Session* session = app_->FindSession(dev.device);
-  const bool running = session && session->IsRunning();
-  const bool is_selected = app_->selected_key() == dev.device;
-  Sel& sel = sel_[dev.device];
+const DeviceInfo* DevicePanel::FindDevice(const std::string& device) const {
+  for (const auto& d : app_->devices())
+    if (d.device == device) return &d;
+  return nullptr;
+}
 
-  // Header: "card (videoN)" with a LIVE marker; selected block tinted.
+bool DevicePanel::ClaimedByOther(const std::string& device,
+                                 int self_index) const {
+  for (int i = 0; i < static_cast<int>(slots_.size()); ++i)
+    if (i != self_index && slots_[i].device == device) return true;
+  return false;
+}
+
+bool DevicePanel::DrawSlot(Slot& slot, int index) {
+  // Auto-assign the first unclaimed device to a fresh slot.
+  if (slot.device.empty() || !FindDevice(slot.device)) {
+    for (const auto& d : app_->devices()) {
+      if (!ClaimedByOther(d.device, index)) {
+        slot.device = d.device;
+        break;
+      }
+    }
+  }
+  const DeviceInfo* dev = FindDevice(slot.device);
+  AppController::Session* session =
+      dev ? app_->FindSession(dev->device) : nullptr;
+  const bool running = session && session->IsRunning();
+  const bool is_selected = dev && app_->selected_key() == dev->device;
+
   char header[160];
-  snprintf(header, sizeof header, "%s (%s)%s###dev%d", dev.card.c_str(),
-           NodeName(dev.device).c_str(), running ? "  [LIVE]" : "", index);
+  snprintf(header, sizeof header, "Camera %d - %s%s###slot%d", index + 1,
+           dev ? DeviceLabel(*dev).c_str() : "(no device)",
+           running ? "  [LIVE]" : "", index);
   if (is_selected)
     ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.20f, 0.32f, 0.45f, 1.0f));
   const bool open =
       ImGui::CollapsingHeader(header, ImGuiTreeNodeFlags_DefaultOpen);
   if (is_selected) ImGui::PopStyleColor();
-  if (ImGui::IsItemClicked(0)) app_->Select(dev.device);
-  if (!open) return;
+  if (ImGui::IsItemClicked(0) && dev) app_->Select(dev->device);
+
+  bool keep = true;
+  if (!open) return keep;
 
   ImGui::PushID(index);
   ImGui::Indent();
 
-  const auto& caps = dev.caps;
-  if (caps.formats.empty()) {
-    ImGui::TextDisabled("device exposes no formats");
-    ImGui::Unindent();
-    ImGui::PopID();
-    return;
-  }
-  if (sel.fmt >= static_cast<int>(caps.formats.size())) sel.fmt = 0;
-  const auto& fmt = caps.formats[sel.fmt];
-
-  // Format / Size / FPS combos (per device).
-  if (ImGui::BeginCombo("Format", ToString(fmt.format))) {
-    for (int i = 0; i < static_cast<int>(caps.formats.size()); ++i) {
-      ImGui::PushID(i);
-      if (ImGui::Selectable(ToString(caps.formats[i].format), i == sel.fmt)) {
-        sel.fmt = i;
-        sel.size = sel.fps = 0;
+  // Device picker: enumerated devices not claimed by another slot.
+  if (ImGui::BeginCombo("Device##pick",
+                        dev ? DeviceLabel(*dev).c_str() : "-")) {
+    int di = 0;
+    for (const auto& d : app_->devices()) {
+      if (ClaimedByOther(d.device, index)) continue;
+      ImGui::PushID(di++);
+      if (ImGui::Selectable(DeviceLabel(d).c_str(),
+                            slot.device == d.device)) {
+        if (slot.device != d.device && running)
+          app_->StopSession(slot.device);  // switching device stops old stream
+        slot.device = d.device;
+        slot.fmt = slot.size = slot.fps = 0;
       }
       ImGui::PopID();
     }
     ImGui::EndCombo();
   }
-  if (fmt.sizes.empty()) {
-    ImGui::TextDisabled("selected format exposes no frame sizes");
-    ImGui::Unindent();
-    ImGui::PopID();
-    return;
-  }
-  if (sel.size >= static_cast<int>(fmt.sizes.size())) sel.size = 0;
-  const auto& sz = fmt.sizes[sel.size];
 
-  char lbl[32];
-  snprintf(lbl, sizeof lbl, "%dx%d", sz.width, sz.height);
-  if (ImGui::BeginCombo("Size", lbl)) {
-    for (int i = 0; i < static_cast<int>(fmt.sizes.size()); ++i) {
-      char l2[32];
-      snprintf(l2, sizeof l2, "%dx%d", fmt.sizes[i].width,
-               fmt.sizes[i].height);
-      ImGui::PushID(i);
-      if (ImGui::Selectable(l2, i == sel.size)) {
-        sel.size = i;
-        sel.fps = 0;
-      }
-      ImGui::PopID();
-    }
-    ImGui::EndCombo();
-  }
-  double sel_fps = 30.0;
-  if (!sz.fps.empty()) {
-    if (sel.fps >= static_cast<int>(sz.fps.size())) sel.fps = 0;
-    sel_fps = sz.fps[sel.fps];
-    char lbl2[24];
-    snprintf(lbl2, sizeof lbl2, "%.0f fps", sel_fps);
-    if (ImGui::BeginCombo("FPS", lbl2)) {
-      for (int i = 0; i < static_cast<int>(sz.fps.size()); ++i) {
-        char l3[24];
-        snprintf(l3, sizeof l3, "%.0f fps", sz.fps[i]);
+  if (!dev) {
+    ImGui::TextDisabled("no unclaimed camera available - plug one in and "
+                        "Refresh");
+  } else {
+    const auto& caps = dev->caps;
+    if (slot.fmt >= static_cast<int>(caps.formats.size())) slot.fmt = 0;
+    const auto& fmt = caps.formats[slot.fmt];
+
+    if (ImGui::BeginCombo("Format", ToString(fmt.format))) {
+      for (int i = 0; i < static_cast<int>(caps.formats.size()); ++i) {
         ImGui::PushID(i);
-        if (ImGui::Selectable(l3, i == sel.fps)) sel.fps = i;
+        if (ImGui::Selectable(ToString(caps.formats[i].format),
+                              i == slot.fmt)) {
+          slot.fmt = i;
+          slot.size = slot.fps = 0;
+        }
         ImGui::PopID();
       }
       ImGui::EndCombo();
     }
-  }
 
-  // Stateful buttons: idle [Start] / clean [Stop] / dirty [Apply][Stop].
-  const bool dirty =
-      running && (session->config.format != fmt.format ||
-                  session->config.width != sz.width ||
-                  session->config.height != sz.height ||
-                  std::fabs(session->config.fps - sel_fps) > 0.1);
-
-  auto start_this = [&] {
-    if (Status st = app_->StartV4l2(dev.device, fmt.format, sz.width,
-                                    sz.height, sel_fps);
-        !st.ok()) {
-      XLOG_WARN("start {} failed: {}", dev.device, st.message());
-      sel_error_ = st.message();
+    if (fmt.sizes.empty()) {
+      ImGui::TextDisabled("selected format exposes no frame sizes");
     } else {
-      sel_error_.clear();
-    }
-  };
+      if (slot.size >= static_cast<int>(fmt.sizes.size())) slot.size = 0;
+      const auto& sz = fmt.sizes[slot.size];
 
-  if (!running) {
-    if (AccentButton("  Start  ", kBtnStart)) start_this();
-  } else {
-    if (dirty) {
-      if (AccentButton("  Apply  ", kBtnApply)) start_this();
+      char lbl[32];
+      snprintf(lbl, sizeof lbl, "%dx%d", sz.width, sz.height);
+      if (ImGui::BeginCombo("Size", lbl)) {
+        for (int i = 0; i < static_cast<int>(fmt.sizes.size()); ++i) {
+          char l2[32];
+          snprintf(l2, sizeof l2, "%dx%d", fmt.sizes[i].width,
+                   fmt.sizes[i].height);
+          ImGui::PushID(i);
+          if (ImGui::Selectable(l2, i == slot.size)) {
+            slot.size = i;
+            slot.fps = 0;
+          }
+          ImGui::PopID();
+        }
+        ImGui::EndCombo();
+      }
+      double sel_fps = 30.0;
+      if (!sz.fps.empty()) {
+        if (slot.fps >= static_cast<int>(sz.fps.size())) slot.fps = 0;
+        sel_fps = sz.fps[slot.fps];
+        char lbl2[24];
+        snprintf(lbl2, sizeof lbl2, "%.0f fps", sel_fps);
+        if (ImGui::BeginCombo("FPS", lbl2)) {
+          for (int i = 0; i < static_cast<int>(sz.fps.size()); ++i) {
+            char l3[24];
+            snprintf(l3, sizeof l3, "%.0f fps", sz.fps[i]);
+            ImGui::PushID(i);
+            if (ImGui::Selectable(l3, i == slot.fps)) slot.fps = i;
+            ImGui::PopID();
+          }
+          ImGui::EndCombo();
+        }
+      }
+
+      // Stateful buttons + Remove.
+      const bool dirty =
+          running && (session->config.format != fmt.format ||
+                      session->config.width != sz.width ||
+                      session->config.height != sz.height ||
+                      std::fabs(session->config.fps - sel_fps) > 0.1);
+
+      auto start_this = [&] {
+        if (Status st = app_->StartV4l2(dev->device, fmt.format, sz.width,
+                                        sz.height, sel_fps);
+            !st.ok()) {
+          XLOG_WARN("start {} failed: {}", dev->device, st.message());
+          slot.error = st.message();
+        } else {
+          slot.error.clear();
+        }
+      };
+
+      if (!running) {
+        if (AccentButton("  Start  ", kBtnStart)) start_this();
+      } else {
+        if (dirty) {
+          if (AccentButton("  Apply  ", kBtnApply)) start_this();
+          ImGui::SameLine();
+        }
+        if (AccentButton("  Stop  ", kBtnStop))
+          app_->StopSession(dev->device);
+      }
       ImGui::SameLine();
-    }
-    if (AccentButton("  Stop  ", kBtnStop)) app_->StopSession(dev.device);
-  }
+      if (ImGui::Button("Remove")) keep = false;
 
-  // Status + live stats for THIS camera.
-  session = app_->FindSession(dev.device);  // may have changed above
-  if (session && session->IsRunning()) {
-    StatusLine(kTextLive, "LIVE", NodeName(dev.device).c_str());
-    ImGui::Bullet();
-    ImGui::Text("%s %dx%d @ %.0f fps", ToString(session->config.format),
-                session->config.width, session->config.height,
-                session->config.fps);
-    if (dirty)
-      ImGui::TextColored(kTextPending, "pending: %s %dx%d @%.0f - Apply",
-                         ToString(fmt.format), sz.width, sz.height, sel_fps);
-    DrawSourceStatsBlock(*session);
-  } else if (!sel_error_.empty() && is_selected) {
-    StatusLine(kTextError, "ERROR", sel_error_.c_str());
-  } else {
-    StatusLine(kTextIdle, "IDLE");
+      // Status + live stats for this slot's camera.
+      session = app_->FindSession(dev->device);
+      if (session && session->IsRunning()) {
+        StatusLine(kTextLive, "LIVE", NodeName(dev->device).c_str());
+        ImGui::Bullet();
+        ImGui::Text("%s %dx%d @ %.0f fps", ToString(session->config.format),
+                    session->config.width, session->config.height,
+                    session->config.fps);
+        if (dirty)
+          ImGui::TextColored(kTextPending, "pending: %s %dx%d @%.0f - Apply",
+                             ToString(fmt.format), sz.width, sz.height,
+                             sel_fps);
+        DrawSourceStatsBlock(*session);
+      } else if (!slot.error.empty()) {
+        StatusLine(kTextError, "ERROR", slot.error.c_str());
+      } else {
+        StatusLine(kTextIdle, "IDLE");
+      }
+    }
   }
 
   ImGui::Unindent();
   ImGui::PopID();
+  return keep;
 }
 
 void DevicePanel::Draw() {
@@ -176,13 +228,18 @@ void DevicePanel::Draw() {
     ImGui::TextDisabled("%zu running", app_->RunningCount());
     ImGui::Separator();
 
-    const auto& devices = app_->devices();
-    if (devices.empty()) {
-      ImGui::TextDisabled("no V4L2 capture devices found");
-    } else {
-      for (int i = 0; i < static_cast<int>(devices.size()); ++i)
-        DrawDeviceBlock(devices[i], i);
+    for (int i = 0; i < static_cast<int>(slots_.size());) {
+      if (DrawSlot(slots_[i], i)) {
+        ++i;
+      } else {
+        // Remove pressed: stop this slot's stream and drop the block.
+        if (!slots_[i].device.empty()) app_->StopSession(slots_[i].device);
+        slots_.erase(slots_.begin() + i);
+      }
     }
+
+    ImGui::Spacing();
+    if (AccentButton(" + Add Camera ", kBtnStart)) slots_.emplace_back();
   }
   End();
 }

@@ -1,9 +1,10 @@
 /*
  * @file device_panel.hpp
- * @brief USB camera manager: one collapsing block per camera, each with its
- *        own format/size/fps combos, stateful Start/Apply/Stop buttons, and
- *        inline live stats. Multiple cameras stream concurrently; clicking a
- *        block selects that camera (drives Controls/Qualify targeting).
+ * @brief Camera slot manager: starts with one camera-settings block; "+ Add
+ *        Camera" appends more as needed. Each slot picks its own device (from
+ *        the devices not claimed by other slots), configures format/size/fps,
+ *        and has stateful Start/Apply/Stop + inline stats. Removing a slot
+ *        stops its stream. Clicking a slot selects that camera globally.
  *
  * Copyright (c) 2026 Ruixiang Du (rdu)
  */
@@ -11,7 +12,7 @@
 #define XMCAM_UI_DEVICE_PANEL_HPP
 
 #include <string>
-#include <unordered_map>
+#include <vector>
 
 #include "viewer/panel.hpp"
 
@@ -25,17 +26,22 @@ class DevicePanel : public quickviz::Panel {
   void Draw() override;
 
  private:
-  struct Sel {
+  struct Slot {
+    std::string device;  // chosen device path ("" until picked)
     int fmt = 0;
     int size = 0;
     int fps = 0;
+    std::string error;  // last start failure for this slot
   };
-  void DrawDeviceBlock(const DeviceInfo& dev, int index);
+
+  // Returns false if the slot's Remove button was pressed.
+  bool DrawSlot(Slot& slot, int index);
+  const DeviceInfo* FindDevice(const std::string& device) const;
+  bool ClaimedByOther(const std::string& device, int self_index) const;
 
   AppController* app_;
   bool enumerated_ = false;
-  std::unordered_map<std::string, Sel> sel_;  // per device path
-  std::string sel_error_;  // last start failure (shown on selected block)
+  std::vector<Slot> slots_;
 };
 
 }  // namespace xmotion

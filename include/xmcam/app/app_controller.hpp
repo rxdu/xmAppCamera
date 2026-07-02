@@ -97,6 +97,17 @@ class AppController {
   const std::string& selected_key() const { return selected_key_; }
   Session* selected() { return FindSession(selected_key_); }
 
+  // The camera the Controls/Qualify panels should target: the selected
+  // session when it is a camera, else the first running camera — so tuning
+  // works immediately after Start without an extra dropdown step.
+  Session* SelectedCamera() {
+    Session* s = selected();
+    if (s && s->controls) return s;
+    for (auto& c : sessions_)
+      if (c->controls && c->IsRunning()) return c.get();
+    return nullptr;
+  }
+
   // --- per-frame (render thread) ---
   void MaintainRecovery();  // all sessions; call once per frame
   bool PullFrame(Session& s, VideoFrame* out) {
@@ -109,27 +120,30 @@ class AppController {
   Status StartRtspExport(Session& s, int port, const std::string& mount);
   void StopRtspExport(Session& s);
 
-  // --- selected-session conveniences (Controls / Qualify panels) ---
-  bool IsRunning() { Session* s = selected(); return s && s->IsRunning(); }
+  // --- target-camera conveniences (Controls / Qualify panels) ---
+  bool IsRunning() {
+    Session* s = SelectedCamera();
+    return s && s->IsRunning();
+  }
   ControlSet* Controls() {
-    Session* s = selected();
+    Session* s = SelectedCamera();
     return s ? s->controls.get() : nullptr;
   }
   int controls_epoch() {
-    Session* s = selected();
+    Session* s = SelectedCamera();
     return s ? s->controls_epoch : -1;
   }
   const std::string& active_device() {
     static const std::string kEmpty;
-    Session* s = selected();
+    Session* s = SelectedCamera();
     return s ? s->key : kEmpty;
   }
   SourceStats Stats() {
-    Session* s = selected();
+    Session* s = SelectedCamera();
     return (s && s->source) ? s->source->GetStats() : SourceStats{};
   }
   DisplayStats display_stats() {
-    Session* s = selected();
+    Session* s = SelectedCamera();
     return s ? s->display_stats : DisplayStats{};
   }
 

@@ -29,21 +29,27 @@ void ControlPanel::ReloadValues(ControlSet* cs) {
 void ControlPanel::Draw() {
   Begin();
   {
-    // Target selector: which running camera these controls bind to. Follows
-    // the global selection (tile / device-block clicks); combo overrides.
-    AppController::Session* target = app_->selected();
-    if (ImGui::BeginCombo("Camera",
-                          (target && target->controls) ? target->label.c_str()
-                                                       : "-")) {
-      for (auto& s : app_->sessions()) {
-        if (!s->controls) continue;
-        ImGui::PushID(s->id);
-        if (ImGui::Selectable(s->label.c_str(),
-                              app_->selected_key() == s->key))
-          app_->Select(s->key);
-        ImGui::PopID();
+    // Target: the selected camera, falling back to the first running one —
+    // tuning works right after Start with no dropdown step. The combo only
+    // appears when there is more than one camera to choose between.
+    AppController::Session* target = app_->SelectedCamera();
+    int n_cams = 0;
+    for (auto& s : app_->sessions())
+      if (s->controls) ++n_cams;
+    if (n_cams > 1) {
+      if (ImGui::BeginCombo("Camera",
+                            target ? target->label.c_str() : "-")) {
+        for (auto& s : app_->sessions()) {
+          if (!s->controls) continue;
+          ImGui::PushID(s->id);
+          if (ImGui::Selectable(s->label.c_str(), target == s.get()))
+            app_->Select(s->key);
+          ImGui::PopID();
+        }
+        ImGui::EndCombo();
       }
-      ImGui::EndCombo();
+    } else if (target) {
+      ImGui::TextDisabled("%s", target->label.c_str());
     }
 
     ControlSet* cs = app_->Controls();

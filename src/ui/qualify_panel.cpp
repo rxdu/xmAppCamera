@@ -85,7 +85,7 @@ void QualifyPanel::StartAutomatedRun() {
 
   // The tap must be attached from the render thread before the worker starts.
   tap_attached_ = false;
-  if (AppController::Session* s = app_->selected()) {
+  if (AppController::Session* s = app_->SelectedCamera()) {
     tap_attached_ = app_->AttachFrameSink(*s, &tap_);
     tap_session_key_ = s->key;
   }
@@ -223,7 +223,7 @@ void QualifyPanel::StartPowerCycleCheck(bool expect_stream_recovery) {
   JoinWorker();
   abort_.store(false);
   tap_attached_ = false;
-  if (AppController::Session* s = app_->selected()) {
+  if (AppController::Session* s = app_->SelectedCamera()) {
     tap_attached_ = app_->AttachFrameSink(*s, &tap_);
     tap_session_key_ = s->key;
   }
@@ -368,7 +368,7 @@ void QualifyPanel::Draw() {
       return;
     }
 
-    if (AppController::Session* sel = app_->selected())
+    if (AppController::Session* sel = app_->SelectedCamera())
       ImGui::TextDisabled("target: %s", sel->label.c_str());
 
     const bool busy = worker_busy_.load();

@@ -4,10 +4,12 @@
  */
 #include "xmcam/ui/device_panel.hpp"
 
+#include <cmath>
 #include <vector>
 
 #include "imgui.h"
 
+#include "xmcam/ui/widgets.hpp"
 #include "xmsigma/logging/xlogger.hpp"
 
 namespace xmotion {
@@ -124,20 +126,70 @@ void DevicePanel::Draw() {
     }
 
     ImGui::Separator();
-    if (ImGui::Button("Start")) {
-      const auto& sz = fmt.sizes[sel_size_];
-      const double fps = sz.fps.empty() ? 30.0 : sz.fps[sel_fps_];
-      // Failure detail is shown via app_->status() below; log it too.
+
+    // Stateful action buttons: the label IS the running-state indicator.
+    //   idle              -> [Start]
+    //   running, clean    -> [Stop]
+    //   running, dirty    -> [Apply] [Stop]   (selection != active config)
+    if (fmt.sizes.empty()) {
+      ImGui::TextDisabled("selected format exposes no frame sizes");
+      End();
+      return;
+    }
+    const auto& sz = fmt.sizes[sel_size_];
+    const double sel_fps = sz.fps.empty() ? 30.0 : sz.fps[sel_fps_];
+    const bool v4l2_running =
+        app_->active_kind() == AppController::ActiveKind::kV4l2;
+    const auto& active = app_->active_config();
+    const bool dirty =
+        v4l2_running &&
+        (active.device != devices[sel_dev_].device ||
+         active.format != fmt.format || active.width != sz.width ||
+         active.height != sz.height || std::fabs(active.fps - sel_fps) > 0.1);
+
+    auto start_selected = [&] {
       if (Status st = app_->StartV4l2(devices[sel_dev_].device, fmt.format,
-                                      sz.width, sz.height, fps);
+                                      sz.width, sz.height, sel_fps);
           !st.ok()) {
         XLOG_WARN("start {} failed: {}", devices[sel_dev_].device,
                   st.message());
       }
+    };
+
+    if (!v4l2_running) {
+      if (AccentButton("  Start  ", kBtnStart)) start_selected();
+      if (app_->active_kind() == AppController::ActiveKind::kGst) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("(network stream active - Start replaces it)");
+      }
+    } else {
+      if (dirty) {
+        if (AccentButton("  Apply  ", kBtnApply)) start_selected();
+        ImGui::SameLine();
+      }
+      if (AccentButton("  Stop  ", kBtnStop)) app_->StopSource();
     }
-    ImGui::SameLine();
-    if (ImGui::Button("Stop")) app_->StopSource();
-    ImGui::TextWrapped("%s", app_->status().c_str());
+
+    // Status: what is actually running, then any pending change.
+    if (v4l2_running) {
+      const auto slash = active.device.rfind('/');
+      ImGui::TextColored(kTextLive, "* streaming %s %dx%d @%.0f (%s)",
+                         ToString(active.format), active.width, active.height,
+                         active.fps,
+                         slash == std::string::npos
+                             ? active.device.c_str()
+                             : active.device.c_str() + slash + 1);
+      if (dirty)
+        ImGui::TextColored(kTextPending, "pending: %s %dx%d @%.0f - Apply",
+                           ToString(fmt.format), sz.width, sz.height, sel_fps);
+    } else {
+      const bool failed =
+          app_->status().find("failed") != std::string::npos;
+      if (failed)
+        ImGui::TextColored(kTextError, "%s", app_->status().c_str());
+      else
+        ImGui::TextWrapped("%s", app_->status().c_str());
+    }
   }
   End();
 }

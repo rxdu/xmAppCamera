@@ -8,6 +8,8 @@
 
 #include "imgui.h"
 
+#include "xmcam/ui/widgets.hpp"
+
 #ifdef XMCAM_WITH_GSTREAMER
 #include "xmcam/pipeline/gst_source.hpp"
 #endif
@@ -48,24 +50,44 @@ void PipelinePanel::Draw() {
     ImGui::InputTextMultiline("##pipeline", buffer_, sizeof buffer_,
                               ImVec2(-1, ImGui::GetTextLineHeight() * 6));
 
+    // Stateful action buttons (mirrors the Device panel):
+    //   idle           -> [Play]
+    //   playing, clean -> [Stop]
+    //   playing, edited-> [Apply] [Stop]
+    const bool gst_running =
+        app_->active_kind() == AppController::ActiveKind::kGst;
+    const bool dirty = gst_running && app_->active_pipeline() != buffer_;
+
+    auto play_current = [&] {
+      Status st = app_->StartGst(buffer_);
+      validate_ok_ = st.ok();
+      validate_msg_ = st.ok() ? "" : st.message();
+    };
+
     if (ImGui::Button("Validate")) {
       Status st = GstSource::Validate(buffer_);
       validate_ok_ = st.ok();
       validate_msg_ = st.ok() ? "valid" : st.message();
     }
     ImGui::SameLine();
-    if (ImGui::Button("Play")) {
-      Status st = app_->StartGst(buffer_);
-      validate_ok_ = st.ok();
-      validate_msg_ = st.ok() ? "playing" : st.message();
+    if (!gst_running) {
+      if (AccentButton("  Play  ", kBtnStart)) play_current();
+    } else {
+      if (dirty) {
+        if (AccentButton("  Apply  ", kBtnApply)) play_current();
+        ImGui::SameLine();
+      }
+      if (AccentButton("  Stop  ", kBtnStop)) app_->StopSource();
     }
-    ImGui::SameLine();
-    if (ImGui::Button("Stop")) app_->StopSource();
 
+    if (gst_running) {
+      ImGui::TextColored(kTextLive, "* playing");
+      if (dirty)
+        ImGui::TextColored(kTextPending, "pending: pipeline edited - Apply");
+    }
     if (!validate_msg_.empty()) {
-      ImGui::TextColored(
-          validate_ok_ ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0.4f, 0.4f, 1), "%s",
-          validate_msg_.c_str());
+      ImGui::TextColored(validate_ok_ ? kTextLive : kTextError, "%s",
+                         validate_msg_.c_str());
     }
 #endif
 

@@ -46,6 +46,22 @@ class AppController {
   const std::string& status() const { return status_; }
   const std::string& active_device() const { return active_device_; }
 
+  // What is currently running, for stateful Start/Stop/Apply buttons: the UI
+  // diffs its selection against this to decide between Stop and Apply.
+  enum class ActiveKind { kNone, kV4l2, kGst };
+  struct ActiveV4l2Config {
+    std::string device;
+    PixelFormat format = PixelFormat::kUnknown;
+    int width = 0;
+    int height = 0;
+    double fps = 0.0;
+  };
+  ActiveKind active_kind() const {
+    return IsRunning() ? active_kind_ : ActiveKind::kNone;
+  }
+  const ActiveV4l2Config& active_config() const { return active_config_; }
+  const std::string& active_pipeline() const { return active_pipeline_; }
+
   // Render-side counters, written by the preview panel each frame.
   struct DisplayStats {
     double display_fps = 0.0;
@@ -88,6 +104,9 @@ class AppController {
 
   std::string status_ = "idle";
   std::string active_device_;
+  ActiveKind active_kind_ = ActiveKind::kNone;
+  ActiveV4l2Config active_config_;
+  std::string active_pipeline_;
   DisplayStats display_stats_;
   int controls_epoch_ = 0;
   uint32_t last_generation_ = 0;

@@ -57,6 +57,8 @@ Status AppController::StartV4l2(const std::string& device, PixelFormat fmt,
   }
   ++controls_epoch_;
   last_generation_ = 0;
+  active_kind_ = ActiveKind::kV4l2;
+  active_config_ = ActiveV4l2Config{device, fmt, width, height, fps};
   status_ = "streaming " + device;
   XLOG_INFO("AppController: started V4L2 {}", device);
   return Ok();
@@ -103,6 +105,8 @@ Status AppController::StartGst(const std::string& pipeline) {
   }
   source_ = std::move(src);
   active_device_ = "gstreamer";
+  active_kind_ = ActiveKind::kGst;
+  active_pipeline_ = pipeline;
   status_ = "streaming pipeline";
   return Ok();
 #else
@@ -168,6 +172,9 @@ void AppController::StopSource() {
     source_.reset();
   }
   attached_sink_ = nullptr;  // any remaining tap is now unattached
+  active_kind_ = ActiveKind::kNone;
+  active_config_ = ActiveV4l2Config{};
+  active_pipeline_.clear();
   controls_.reset();
   ctrl_dev_.reset();
   active_device_.clear();

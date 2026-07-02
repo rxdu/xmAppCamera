@@ -37,7 +37,9 @@ struct VideoFrame {
   int stride2 = 0;
 
   int64_t pts_ns = 0;   // presentation timestamp, for latency accounting
-  uint64_t seq = 0;     // monotonically increasing capture sequence
+  uint64_t seq = 0;     // monotonically increasing capture sequence (ours)
+  uint32_t hw_seq = 0;  // driver's v4l2_buffer.sequence — gaps reveal kernel-
+                        // level frame drops (0 for non-V4L2 sources)
 
   std::shared_ptr<void> owner;  // keeps the pixel buffer alive
 

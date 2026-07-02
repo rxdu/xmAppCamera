@@ -49,6 +49,7 @@ QualifyPanel::QualifyPanel(AppController* app)
     auto_run_pending_ = true;
     auto_export_ = true;
   }
+  if (const char* s = std::getenv("XMCAM_SOAK_S")) soak_s_ = std::atoi(s);
 }
 
 QualifyPanel::~QualifyPanel() {
@@ -151,6 +152,60 @@ void QualifyPanel::StartAutomatedRun() {
       const auto snap = tap_.Take();
       const double nominal_fps = app_->Stats().capture_fps;
       PutResult(CheckTimestampStability(snap.pts_ns, nominal_fps));
+    }
+
+    // 7. Serial uniqueness across all attached cameras (fleet/by-id sanity).
+    if (!abort_.load()) {
+      std::vector<std::string> serials;
+      for (const auto& d : app_->devices()) {
+        PlatformInfo dpi;
+        if (CollectPlatformInfo(d.device, &dpi).ok())
+          serials.push_back(dpi.usb_serial);
+      }
+      PutResult(CheckSerialUniqueness(pi, serials));
+    }
+
+    // 8. USB link audit (speed / hub sharing).
+    if (!abort_.load()) PutResult(CheckUsbLink(pi));
+
+    // 9-10. Photometric effect: controls must actually change the image,
+    // not just read back. Exposure then gain.
+    if (cs && !abort_.load()) {
+      PutResult(CheckControlEffect(*cs, tap_, "exposure_effect",
+                                   "Exposure affects the image",
+                                   V4L2_CID_EXPOSURE_AUTO,
+                                   V4L2_EXPOSURE_MANUAL,
+                                   V4L2_CID_EXPOSURE_ABSOLUTE, 400, 600,
+                                   20.0));
+      PutResult(CheckControlEffect(*cs, tap_, "gain_effect",
+                                   "Gain affects the image",
+                                   V4L2_CID_EXPOSURE_AUTO,
+                                   V4L2_EXPOSURE_MANUAL, V4L2_CID_GAIN, 400,
+                                   600, 10.0));
+    }
+
+    // 11. Write->effect latency (exposure).
+    if (cs && !abort_.load())
+      PutResult(CheckWriteEffectLatency(*cs, tap_, V4L2_CID_EXPOSURE_AUTO,
+                                        V4L2_EXPOSURE_MANUAL,
+                                        V4L2_CID_EXPOSURE_ABSOLUTE));
+
+    // 12. Driver open/close stress (runs alongside the live stream).
+    if (!abort_.load()) PutResult(CheckOpenCloseStress(device, 100));
+
+    // 13. Sustained soak: kernel drop (hw_seq gaps), stuck/black frames,
+    // fps sag, interval jitter, RSS growth.
+    if (!abort_.load()) {
+      const int dur = soak_s_ > 0 ? soak_s_ : 120;
+      PutResult({"soak", "Sustained throughput soak", QualStatus::kRunning,
+                 "running " + std::to_string(dur) + "s soak...", {}});
+      const long rss0 = ReadRssKb();
+      tap_.Reset();
+      for (int i = 0; i < dur && !abort_.load(); ++i)
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+      const auto snap = tap_.Take();
+      PutResult(CheckSoak(snap, app_->Stats().capture_fps, rss0, ReadRssKb(),
+                          dur));
     }
 
     worker_busy_.store(false);
@@ -305,6 +360,9 @@ void QualifyPanel::Draw() {
     const bool busy = worker_busy_.load();
     if (busy) ImGui::BeginDisabled();
     if (ImGui::Button("Run automated checks")) StartAutomatedRun();
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(90);
+    ImGui::InputInt("soak s", &soak_s_);
     if (ImGui::Button("Power-cycle identity check"))
       StartPowerCycleCheck(false);
     ImGui::SameLine();

@@ -2,12 +2,15 @@
  * @file test_qualify.cpp
  * @brief Unit tests for the qualification backend: timestamp stability,
  *        image fingerprint compare, enumeration check, FrameTap statistics,
- *        report writers, and (device permitting) platform info collection.
+ *        soak evaluation, serial uniqueness, USB link audit, open/close
+ *        stress, report writers, and (device permitting) platform info
+ *        collection and the control-effect/latency skip paths.
  *
  * Copyright (c) 2026 Ruixiang Du (rdu)
  */
 #include <unistd.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <fstream>
 #include <memory>
@@ -15,6 +18,8 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "xmcam/control/control_set.hpp"
+#include "xmcam/pipeline/v4l2_device.hpp"
 #include "xmcam/qualify/frame_tap.hpp"
 #include "xmcam/qualify/qual_checks.hpp"
 #include "xmcam/qualify/qual_report.hpp"
@@ -271,6 +276,267 @@ TEST(PlatformInfo, CollectFromVideo0) {
   ASSERT_TRUE(s.ok()) << s.message();
   EXPECT_FALSE(info.kernel.empty());
   EXPECT_FALSE(info.driver.empty());
+}
+
+// ---------------------------------------------------------------------------
+// FrameTap v2 aggregates
+// ---------------------------------------------------------------------------
+// Owning I420 test frame with constant plane values.
+struct TestFrame {
+  std::shared_ptr<std::vector<uint8_t>> buffer;
+  VideoFrame frame;
+};
+
+TestFrame MakeI420Frame(int width, int height, uint8_t y, uint8_t u,
+                        uint8_t v) {
+  const size_t y_size = static_cast<size_t>(width) * height;
+  const size_t c_size = y_size / 4;
+  TestFrame t;
+  t.buffer = std::make_shared<std::vector<uint8_t>>(y_size + 2 * c_size);
+  uint8_t* base = t.buffer->data();
+  std::fill(base, base + y_size, y);
+  std::fill(base + y_size, base + y_size + c_size, u);
+  std::fill(base + y_size + c_size, base + y_size + 2 * c_size, v);
+  t.frame.width = width;
+  t.frame.height = height;
+  t.frame.format = PixelFormat::kI420;
+  t.frame.data = base;
+  t.frame.stride = width;
+  t.frame.plane1 = base + y_size;
+  t.frame.stride1 = width / 2;
+  t.frame.plane2 = base + y_size + c_size;
+  t.frame.stride2 = width / 2;
+  t.frame.owner = t.buffer;
+  return t;
+}
+
+TEST(FrameTapV2, HwSeqGapsCounted) {
+  FrameTap tap;
+  TestFrame t = MakeI420Frame(64, 48, 100, 128, 128);
+  const uint32_t seqs[] = {1, 2, 5};  // 5 skips 3 and 4 -> 2 gaps
+  for (int i = 0; i < 3; ++i) {
+    t.frame.pts_ns = static_cast<int64_t>(i) * kNs30FpsPeriod;
+    t.frame.hw_seq = seqs[i];
+    tap.OnFrame(t.frame);
+  }
+  EXPECT_EQ(tap.Take().hw_seq_gaps, 2u);
+}
+
+TEST(FrameTapV2, HwSeqZeroIgnored) {
+  FrameTap tap;
+  TestFrame t = MakeI420Frame(64, 48, 100, 128, 128);
+  const uint32_t seqs[] = {0, 0, 0};  // non-V4L2 source
+  for (int i = 0; i < 3; ++i) {
+    t.frame.pts_ns = static_cast<int64_t>(i) * kNs30FpsPeriod;
+    t.frame.hw_seq = seqs[i];
+    tap.OnFrame(t.frame);
+  }
+  EXPECT_EQ(tap.Take().hw_seq_gaps, 0u);
+}
+
+TEST(FrameTapV2, StuckAndBlackWhiteFramesCounted) {
+  FrameTap tap;
+  TestFrame same = MakeI420Frame(64, 48, 100, 128, 128);
+  same.frame.pts_ns = 0;
+  tap.OnFrame(same.frame);
+  same.frame.pts_ns = kNs30FpsPeriod;  // identical payload again
+  tap.OnFrame(same.frame);
+  TestFrame black = MakeI420Frame(64, 48, 0, 128, 128);
+  black.frame.pts_ns = 2 * kNs30FpsPeriod;
+  tap.OnFrame(black.frame);
+  TestFrame white = MakeI420Frame(64, 48, 255, 128, 128);
+  white.frame.pts_ns = 3 * kNs30FpsPeriod;
+  tap.OnFrame(white.frame);
+
+  FrameTap::Snapshot s = tap.Take();
+  EXPECT_GE(s.stuck_frames, 1u);
+  EXPECT_EQ(s.black_frames, 1u);
+  EXPECT_EQ(s.white_frames, 1u);
+}
+
+TEST(FrameTapV2, RecentMeansOldestFirst) {
+  FrameTap tap;
+  const uint8_t levels[] = {50, 100, 150};
+  for (int i = 0; i < 3; ++i) {
+    TestFrame t = MakeI420Frame(64, 48, levels[i], 128, 128);
+    t.frame.pts_ns = static_cast<int64_t>(i) * kNs30FpsPeriod;
+    tap.OnFrame(t.frame);
+  }
+  std::vector<FrameTap::MeanSample> means = tap.RecentMeans();
+  ASSERT_EQ(means.size(), 3u);
+  for (int i = 0; i < 3; ++i) {
+    EXPECT_EQ(means[i].pts_ns, static_cast<int64_t>(i) * kNs30FpsPeriod);
+    EXPECT_NEAR(means[i].mean_y, static_cast<double>(levels[i]), 0.01);
+  }
+}
+
+TEST(FrameTapV2, Per10sBucketsAndIntervalStats) {
+  FrameTap tap;
+  TestFrame t = MakeI420Frame(64, 48, 100, 128, 128);
+  // 25 frames at 1 fps spanning 25 s -> buckets of 10 / 10 / 5.
+  for (int i = 0; i < 25; ++i) {
+    t.frame.pts_ns = static_cast<int64_t>(i) * 1000000000LL;
+    tap.OnFrame(t.frame);
+  }
+  FrameTap::Snapshot s = tap.Take();
+  ASSERT_EQ(s.per10s_frames.size(), 3u);
+  EXPECT_EQ(s.per10s_frames[0], 10u);
+  EXPECT_EQ(s.per10s_frames[1], 10u);
+  EXPECT_EQ(s.per10s_frames[2], 5u);
+  EXPECT_NEAR(s.interval_mean_ms, 1000.0, 1e-6);
+  EXPECT_NEAR(s.interval_stddev_ms, 0.0, 1e-6);
+  EXPECT_NEAR(s.interval_min_ms, 1000.0, 1e-6);
+  EXPECT_NEAR(s.interval_max_ms, 1000.0, 1e-6);
+
+  tap.Reset();
+  s = tap.Take();
+  EXPECT_TRUE(s.per10s_frames.empty());
+  EXPECT_EQ(s.hw_seq_gaps, 0u);
+  EXPECT_TRUE(tap.RecentMeans().empty());
+}
+
+// ---------------------------------------------------------------------------
+// CheckSoak
+// ---------------------------------------------------------------------------
+// A clean 35 s / 20 fps soak window: three full 10 s buckets and one partial.
+FrameTap::Snapshot MakeSoakSnapshot() {
+  FrameTap::Snapshot s;
+  s.frames = 650;
+  s.per10s_frames = {200, 200, 200, 50};
+  s.interval_mean_ms = 50.0;
+  s.interval_stddev_ms = 1.0;
+  s.interval_min_ms = 48.0;
+  s.interval_max_ms = 52.0;
+  return s;
+}
+
+TEST(Soak, CleanWindowPasses) {
+  QualCheckResult r = CheckSoak(MakeSoakSnapshot(), 20.0, 100000, 100100, 35);
+  EXPECT_EQ(r.status, QualStatus::kPass) << r.detail;
+  EXPECT_EQ(FindMetric(r, "frames"), "650");
+  EXPECT_EQ(FindMetric(r, "fps_min_bucket"), "20.000");
+  EXPECT_EQ(FindMetric(r, "fps_max_bucket"), "20.000");
+  EXPECT_EQ(FindMetric(r, "rss_growth_kb"), "100");
+}
+
+TEST(Soak, HwSeqGapsFail) {
+  FrameTap::Snapshot s = MakeSoakSnapshot();
+  s.hw_seq_gaps = 10;  // > 0.1% of 650 frames
+  QualCheckResult r = CheckSoak(s, 20.0, 100000, 100100, 35);
+  EXPECT_EQ(r.status, QualStatus::kFail) << r.detail;
+  EXPECT_NE(r.detail.find("gap"), std::string::npos);
+}
+
+TEST(Soak, StuckFramesFail) {
+  FrameTap::Snapshot s = MakeSoakSnapshot();
+  s.stuck_frames = 1;
+  QualCheckResult r = CheckSoak(s, 20.0, 100000, 100100, 35);
+  EXPECT_EQ(r.status, QualStatus::kFail) << r.detail;
+  EXPECT_NE(r.detail.find("stuck"), std::string::npos);
+}
+
+TEST(Soak, SaggingBucketFails) {
+  FrameTap::Snapshot s = MakeSoakSnapshot();
+  s.per10s_frames = {200, 200, 100, 50};  // one full bucket at 50% of mean
+  s.frames = 550;
+  QualCheckResult r = CheckSoak(s, 20.0, 100000, 100100, 35);
+  EXPECT_EQ(r.status, QualStatus::kFail) << r.detail;
+  EXPECT_NE(r.detail.find("bucket"), std::string::npos);
+}
+
+TEST(Soak, RssGrowthFails) {
+  QualCheckResult r =
+      CheckSoak(MakeSoakSnapshot(), 20.0, 100000, 120480, 35);  // +20 MB
+  EXPECT_EQ(r.status, QualStatus::kFail) << r.detail;
+  EXPECT_NE(r.detail.find("RSS"), std::string::npos);
+}
+
+TEST(Soak, TooFewFramesSkipped) {
+  FrameTap::Snapshot s;
+  s.frames = 50;
+  QualCheckResult r = CheckSoak(s, 20.0, 100000, 100100, 5);
+  EXPECT_EQ(r.status, QualStatus::kSkipped) << r.detail;
+}
+
+TEST(Soak, ReadRssKbReturnsPositive) {
+  EXPECT_GT(ReadRssKb(), 0);
+}
+
+// ---------------------------------------------------------------------------
+// CheckSerialUniqueness
+// ---------------------------------------------------------------------------
+PlatformInfo MakePlatformWithSerial(const std::string& serial) {
+  PlatformInfo pi;
+  pi.usb_serial = serial;
+  return pi;
+}
+
+TEST(SerialUniqueness, VersionLikeSerialFails) {
+  QualCheckResult r = CheckSerialUniqueness(MakePlatformWithSerial("01.00.00"),
+                                            {"01.00.00"});
+  EXPECT_EQ(r.status, QualStatus::kFail) << r.detail;
+  EXPECT_NE(r.detail.find("version"), std::string::npos);
+}
+
+TEST(SerialUniqueness, EmptySerialFails) {
+  QualCheckResult r = CheckSerialUniqueness(MakePlatformWithSerial(""), {});
+  EXPECT_EQ(r.status, QualStatus::kFail) << r.detail;
+}
+
+TEST(SerialUniqueness, UniqueSerialPasses) {
+  QualCheckResult r = CheckSerialUniqueness(
+      MakePlatformWithSerial("SN-A1B2C3"), {"SN-A1B2C3", "SN-D4E5F6"});
+  EXPECT_EQ(r.status, QualStatus::kPass) << r.detail;
+}
+
+TEST(SerialUniqueness, DuplicateSerialFails) {
+  QualCheckResult r = CheckSerialUniqueness(
+      MakePlatformWithSerial("SN-A1B2C3"), {"SN-A1B2C3", "SN-A1B2C3"});
+  EXPECT_EQ(r.status, QualStatus::kFail) << r.detail;
+  EXPECT_EQ(FindMetric(r, "occurrences"), "2");
+}
+
+// ---------------------------------------------------------------------------
+// CheckUsbLink
+// ---------------------------------------------------------------------------
+TEST(UsbLink, EmptySysfsPathSkipped) {
+  QualCheckResult r = CheckUsbLink(PlatformInfo{});
+  EXPECT_EQ(r.status, QualStatus::kSkipped) << r.detail;
+}
+
+// ---------------------------------------------------------------------------
+// CheckOpenCloseStress (needs a real device)
+// ---------------------------------------------------------------------------
+TEST(OpenCloseStress, FiveCyclesOnVideo0) {
+  if (::access("/dev/video0", F_OK) != 0)
+    GTEST_SKIP() << "/dev/video0 not present";
+  QualCheckResult r = CheckOpenCloseStress("/dev/video0", 5);
+  EXPECT_EQ(r.status, QualStatus::kPass) << r.detail;
+  EXPECT_EQ(FindMetric(r, "cycles"), "5");
+  EXPECT_FALSE(FindMetric(r, "avg_ms").empty());
+}
+
+// ---------------------------------------------------------------------------
+// CheckControlEffect / CheckWriteEffectLatency skip paths (the live-camera
+// behavior is exercised by the GUI, not gtest)
+// ---------------------------------------------------------------------------
+TEST(ControlEffect, MissingControlsSkipped) {
+  if (::access("/dev/video0", F_OK) != 0)
+    GTEST_SKIP() << "/dev/video0 not present";
+  auto dev = std::make_shared<V4l2Device>();
+  Status s = dev->Open("/dev/video0");
+  if (!s.ok()) GTEST_SKIP() << "/dev/video0 not openable: " << s.message();
+  ControlSet cs(dev);
+  ASSERT_TRUE(cs.Refresh().ok());
+  FrameTap tap;
+  constexpr uint32_t kBogusCtrl = 0x00feed00;  // not a real V4L2 CID
+
+  QualCheckResult effect = CheckControlEffect(
+      cs, tap, "effect_test", "Effect test", 0, 0, kBogusCtrl, 10, 10, 5.0);
+  EXPECT_EQ(effect.status, QualStatus::kSkipped) << effect.detail;
+
+  QualCheckResult latency = CheckWriteEffectLatency(cs, tap, 0, 0, kBogusCtrl);
+  EXPECT_EQ(latency.status, QualStatus::kSkipped) << latency.detail;
 }
 
 }  // namespace

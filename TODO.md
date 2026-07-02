@@ -50,5 +50,6 @@ Tracks WHAT, not HOW. Status: `[ ]` todo · `[~]` in progress · `[x]` done. See
 - [x] Hot-plug auto-recovery in `V4l2Source` (ENODEV → re-open via by-id, backoff, generation counter; controls rebuilt via epoch)
 - [x] `qualify/` backend: FrameTap, control-lock/AWB checks, timestamp stability, platform+firmware identity (sysfs), image fingerprint, YAML+MD report writers (14 tests)
 - [x] QualifyPanel: automated run, power-cycle identity + disconnect-recovery operator checks, vendor/procurement record fields, report export; XMCAM_AUTOQUALIFY hook
-- [x] Verified on camera: platform/enumeration/exposure-lock/gain-lock/AWB-disable/timestamps all PASS (fw 32e4:0234 bcdDevice 0237; 11.34ms ±1.5ms intervals)
+- [x] Verified on camera: 13 checks — 12 PASS (incl. effect sweeps, 24.6ms write→effect latency, 100x open/close, 120s soak: 10583 frames, 0 kernel gaps, 0 stuck/black, fps 86.8–88.3, RSS +72KB) + 1 expected FAIL (serial "01.00.00" is version-like → fleet by-id collision risk; raise with Arducam)
+- [x] Extended checks: photometric effect verification, soak w/ hw_seq gap detection, serial uniqueness, USB link audit, open/close stress, write→effect latency (19 new tests)
 - [ ] Operator-in-the-loop checks exercised with a physical unplug (user)

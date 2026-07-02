@@ -47,6 +47,7 @@ class QualifyPanel : public quickviz::Panel {
   bool tap_attached_ = false;
   bool auto_run_pending_ = false;  // XMCAM_AUTOQUALIFY headless-test hook
   bool auto_export_ = false;
+  int soak_s_ = 120;  // soak duration (bench default; XMCAM_SOAK_S overrides)
 
   std::thread worker_;
   std::atomic<bool> worker_busy_{false};

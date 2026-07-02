@@ -47,6 +47,7 @@ struct PlatformInfo {
   std::string usb_vid_pid;     // "1234:abcd" ("" if not resolvable)
   std::string usb_bcd_device;  // firmware revision from sysfs bcdDevice ("" if none)
   std::string usb_serial;      // sysfs serial ("" if none)
+  std::string usb_sysfs_path;  // sysfs device dir, e.g. "/sys/bus/usb/devices/3-2" ("" if none)
   std::string bus_info;        // QUERYCAP bus_info
 };
 

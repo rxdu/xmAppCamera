@@ -374,6 +374,7 @@ void V4l2Source::CaptureLoop() {
       pool_->Requeue(buf.index);
       if (ds.ok()) {
         decoded.seq = seq_++;
+        decoded.hw_seq = buf.sequence;
         const double fps = capture_rate_.Tick();
         {
           std::lock_guard<std::mutex> lk(stats_mtx_);
@@ -410,6 +411,7 @@ void V4l2Source::CaptureLoop() {
     f.data = static_cast<const uint8_t*>(pool->slot(index).start);
     f.pts_ns = TimevalToNs(buf.timestamp);
     f.seq = seq_++;
+    f.hw_seq = buf.sequence;
     f.owner = lease;
 
     const double fps = capture_rate_.Tick();

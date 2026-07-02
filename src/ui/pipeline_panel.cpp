@@ -82,7 +82,7 @@ void PipelinePanel::Draw() {
     }
 
     if (gst_running) {
-      ImGui::TextColored(kTextLive, "* playing");
+      StatusLine(kTextLive, "LIVE", "network stream");
       if (dirty)
         ImGui::TextColored(kTextPending, "pending: pipeline edited - Apply");
       DrawSourceStatsBlock(app_);

@@ -32,6 +32,25 @@ inline const ImVec4 kBtnApply{0.62f, 0.44f, 0.10f, 1.0f};  // amber
 inline const ImVec4 kTextLive{0.3f, 1.0f, 0.3f, 1.0f};
 inline const ImVec4 kTextPending{1.0f, 0.75f, 0.25f, 1.0f};
 inline const ImVec4 kTextError{1.0f, 0.4f, 0.4f, 1.0f};
+inline const ImVec4 kTextIdle{0.55f, 0.55f, 0.55f, 1.0f};
+
+// Status line with a drawn indicator dot (the bundled font has no U+25CF
+// glyph, so the dot is rendered via the draw list): `(o) LABEL  detail`.
+inline void StatusLine(const ImVec4& color, const char* label,
+                       const char* detail = nullptr) {
+  const float h = ImGui::GetTextLineHeight();
+  const ImVec2 p = ImGui::GetCursorScreenPos();
+  const float r = h * 0.28f;
+  ImGui::GetWindowDrawList()->AddCircleFilled(
+      ImVec2(p.x + r + 1.0f, p.y + h * 0.55f), r, ImGui::GetColorU32(color));
+  ImGui::Dummy(ImVec2(r * 2.0f + 6.0f, h));
+  ImGui::SameLine(0.0f, 0.0f);
+  ImGui::TextColored(color, "%s", label);
+  if (detail && detail[0]) {
+    ImGui::SameLine();
+    ImGui::TextDisabled("%s", detail);
+  }
+}
 
 }  // namespace xmotion
 

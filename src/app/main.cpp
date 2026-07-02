@@ -7,6 +7,8 @@
 #include <cstdlib>
 #include <memory>
 
+#include "imgui.h"
+
 #include "viewer/viewer.hpp"
 
 #include "xmcam/app/app_controller.hpp"
@@ -24,6 +26,10 @@ int main() {
 
   Viewer viewer("xmAppCamera", 1600, 900);
   viewer.EnableDocking(true);
+  // quickviz's EnableDocking turns on shift-gated docking, which makes
+  // re-docking an undocked panel look impossible (no drop overlay without
+  // Shift). Plain drag-to-dock is the expected behavior here.
+  ImGui::GetIO().ConfigDockingWithShift = false;
   viewer.ApplyDarkColorScheme();
 
   // One root panel fills the window and lays out the sidebar + preview.

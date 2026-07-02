@@ -176,12 +176,12 @@ void DevicePanel::Draw() {
     // (the Stats content lives here; the bottom tabs stay action-oriented).
     if (v4l2_running) {
       const auto slash = active.device.rfind('/');
-      ImGui::TextColored(kTextLive, "* streaming (%s)",
-                         slash == std::string::npos
-                             ? active.device.c_str()
-                             : active.device.c_str() + slash + 1);
+      StatusLine(kTextLive, "LIVE",
+                 slash == std::string::npos ? active.device.c_str()
+                                            : active.device.c_str() + slash +
+                                                  1);
       ImGui::Bullet();
-      ImGui::Text("%s %dx%d @%.0f", ToString(active.format), active.width,
+      ImGui::Text("%s %dx%d @ %.0f fps", ToString(active.format), active.width,
                   active.height, active.fps);
       if (dirty)
         ImGui::TextColored(kTextPending, "pending: %s %dx%d @%.0f - Apply",
@@ -191,9 +191,9 @@ void DevicePanel::Draw() {
       const bool failed =
           app_->status().find("failed") != std::string::npos;
       if (failed)
-        ImGui::TextColored(kTextError, "%s", app_->status().c_str());
+        StatusLine(kTextError, "ERROR", app_->status().c_str());
       else
-        ImGui::TextWrapped("%s", app_->status().c_str());
+        StatusLine(kTextIdle, "IDLE");
     }
   }
   End();

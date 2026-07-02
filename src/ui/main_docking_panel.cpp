@@ -15,7 +15,6 @@ MainDockingPanel::MainDockingPanel(AppController* app)
       preview_(app),
       control_(app),
       pipeline_(app),
-      stats_(app),
       qualify_(app) {
   this->SetAutoLayout(false);
   this->SetNoResize(true);
@@ -47,7 +46,8 @@ void MainDockingPanel::Draw() {
       ImGuiID left, center;
       ImGui::DockBuilderSplitNode(dockspace_id_, ImGuiDir_Left, 0.24f, &left,
                                   &center);
-      // Split the sidebar: device/network on top, controls/stats below.
+      // Split the sidebar: device/network (info) on top, controls/qualify
+      // (actions) below; live stats render inside the owning source panel.
       ImGuiID left_top, left_bottom;
       ImGui::DockBuilderSplitNode(left, ImGuiDir_Up, 0.42f, &left_top,
                                   &left_bottom);
@@ -55,7 +55,6 @@ void MainDockingPanel::Draw() {
       ImGui::DockBuilderDockWindow("Device", left_top);
       ImGui::DockBuilderDockWindow("Network Stream", left_top);
       ImGui::DockBuilderDockWindow("Controls", left_bottom);
-      ImGui::DockBuilderDockWindow("Stats", left_bottom);
       ImGui::DockBuilderDockWindow("Qualify", left_bottom);
       ImGui::DockBuilderDockWindow("Preview", center);
       ImGui::DockBuilderFinish(dockspace_id_);
@@ -67,7 +66,6 @@ void MainDockingPanel::Draw() {
   device_.Draw();
   pipeline_.Draw();
   control_.Draw();
-  stats_.Draw();
   qualify_.Draw();
   preview_.Draw();
 }

@@ -9,6 +9,7 @@
 
 #include "imgui.h"
 
+#include "xmcam/ui/stats_view.hpp"
 #include "xmcam/ui/widgets.hpp"
 #include "xmsigma/logging/xlogger.hpp"
 
@@ -170,18 +171,22 @@ void DevicePanel::Draw() {
       if (AccentButton("  Stop  ", kBtnStop)) app_->StopSource();
     }
 
-    // Status: what is actually running, then any pending change.
+    // Status under the buttons: short lines so a narrow sidebar never clips.
+    // Header + config bullet, pending delta, then the live stats block
+    // (the Stats content lives here; the bottom tabs stay action-oriented).
     if (v4l2_running) {
       const auto slash = active.device.rfind('/');
-      ImGui::TextColored(kTextLive, "* streaming %s %dx%d @%.0f (%s)",
-                         ToString(active.format), active.width, active.height,
-                         active.fps,
+      ImGui::TextColored(kTextLive, "* streaming (%s)",
                          slash == std::string::npos
                              ? active.device.c_str()
                              : active.device.c_str() + slash + 1);
+      ImGui::Bullet();
+      ImGui::Text("%s %dx%d @%.0f", ToString(active.format), active.width,
+                  active.height, active.fps);
       if (dirty)
         ImGui::TextColored(kTextPending, "pending: %s %dx%d @%.0f - Apply",
                            ToString(fmt.format), sz.width, sz.height, sel_fps);
+      DrawSourceStatsBlock(app_);
     } else {
       const bool failed =
           app_->status().find("failed") != std::string::npos;

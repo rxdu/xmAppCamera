@@ -6,8 +6,7 @@ add_library(xmcam_ui
   device_panel.cpp
   control_panel.cpp
   pipeline_panel.cpp
-  qualify_panel.cpp
-  stats_panel.cpp)
+  qualify_panel.cpp)
 
 target_include_directories(xmcam_ui PUBLIC
   $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)

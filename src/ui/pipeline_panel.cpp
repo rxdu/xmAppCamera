@@ -8,6 +8,7 @@
 
 #include "imgui.h"
 
+#include "xmcam/ui/stats_view.hpp"
 #include "xmcam/ui/widgets.hpp"
 
 #ifdef XMCAM_WITH_GSTREAMER
@@ -84,6 +85,7 @@ void PipelinePanel::Draw() {
       ImGui::TextColored(kTextLive, "* playing");
       if (dirty)
         ImGui::TextColored(kTextPending, "pending: pipeline edited - Apply");
+      DrawSourceStatsBlock(app_);
     }
     if (!validate_msg_.empty()) {
       ImGui::TextColored(validate_ok_ ? kTextLive : kTextError, "%s",

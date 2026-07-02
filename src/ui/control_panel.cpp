@@ -39,7 +39,9 @@ void ControlPanel::Draw() {
     int n_cams = 0;
     for (auto& s : app_->sessions())
       if (s->controls) ++n_cams;
-    if (n_cams > 1) {
+    // The combo shows when there is a choice to make OR when the user has
+    // deselected (target null) and needs a way back in.
+    if (n_cams > 1 || (n_cams >= 1 && !target)) {
       FieldLabel("Camera");
       if (ImGui::BeginCombo("##camera",
                             target ? target->label.c_str() : "-")) {
@@ -58,7 +60,11 @@ void ControlPanel::Draw() {
 
     ControlSet* cs = app_->Controls();
     if (!cs) {
-      ImGui::TextDisabled("start (and select) a USB camera to tune controls");
+      if (n_cams >= 1)
+        ImGui::TextDisabled(
+            "no camera selected - pick one above, or click a preview tile");
+      else
+        ImGui::TextDisabled("start a USB camera to tune controls");
       End();
       return;
     }

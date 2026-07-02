@@ -164,6 +164,8 @@ void AppController::StopSession(const std::string& key) {
   if (it == sessions_.end()) return;
   TeardownSession(**it);
   sessions_.erase(it);
+  // Stopping the selected session is an explicit reset, not a retarget.
+  if (selected_key_ == key) selected_key_.clear();
   XLOG_INFO("AppController: session '{}' stopped ({} running)", key,
             RunningCount());
 }

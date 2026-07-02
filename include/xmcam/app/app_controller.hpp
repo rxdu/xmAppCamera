@@ -97,12 +97,17 @@ class AppController {
   const std::string& selected_key() const { return selected_key_; }
   Session* selected() { return FindSession(selected_key_); }
 
-  // The camera the Controls/Qualify panels should target: the selected
-  // session when it is a camera, else the first running camera — so tuning
-  // works immediately after Start without an extra dropdown step.
+  // The camera the Controls/Qualify panels should target:
+  //  - the selected session when it is a camera;
+  //  - the first running camera when the selection merely sits elsewhere
+  //    (e.g. a network tile) — tuning works right after Start, no dropdown;
+  //  - NONE when the user explicitly deselected (empty key): a deliberate
+  //    "hands off" that guards against tuning the wrong camera.
   Session* SelectedCamera() {
+    if (selected_key_.empty()) return nullptr;
     Session* s = selected();
-    if (s && s->controls) return s;
+    if (!s) return nullptr;  // stale key (session stopped): stay hands-off
+    if (s->controls) return s;
     for (auto& c : sessions_)
       if (c->controls && c->IsRunning()) return c.get();
     return nullptr;

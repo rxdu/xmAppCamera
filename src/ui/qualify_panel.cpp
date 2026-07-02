@@ -363,7 +363,8 @@ void QualifyPanel::Draw() {
 
     if (!app_->IsRunning() || !app_->Controls()) {
       ImGui::TextWrapped(
-          "Start a USB camera (Device panel) to run qualification.");
+          "Start and select a USB camera (Device panel or preview tile) "
+          "to run qualification.");
       End();
       return;
     }

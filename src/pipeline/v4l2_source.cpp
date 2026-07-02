@@ -359,8 +359,9 @@ void V4l2Source::CaptureLoop() {
           stats_.capture_fps = fps;
           stats_.frames = capture_rate_.count();
           stats_.decode_ms = decode_ms;
-          stats_.decoder = "mjpeg->rgba";
+          stats_.decoder = "mjpeg->i420";
         }
+        EmitFrame(decoded);
         frames_.Push(std::move(decoded));
       } else {
         XLOG_WARN("MJPEG decode failed: {}", ds.message());
@@ -397,6 +398,7 @@ void V4l2Source::CaptureLoop() {
       stats_.frames = capture_rate_.count();
       stats_.decoder = "raw";
     }
+    EmitFrame(f);
     frames_.Push(std::move(f));
   }
 }

@@ -17,6 +17,9 @@
 #include "xmcam/pipeline/v4l2_device.hpp"
 #include "xmcam/pipeline/v4l2_source.hpp"
 #include "xmcam/pipeline/video_source.hpp"
+#ifdef XMCAM_WITH_RTSP_SERVER
+#include "xmcam/export/rtsp_sink.hpp"
+#endif
 
 namespace xmotion {
 
@@ -62,6 +65,12 @@ class AppController {
   // --- controls (non-null only for a running V4L2 source) ---
   ControlSet* Controls() { return controls_.get(); }
 
+  // --- RTSP re-export (Phase 5; no-op if built without gst-rtsp-server) ---
+  Status StartRtspExport(int port, const std::string& mount);
+  void StopRtspExport();
+  bool RtspExporting() const;
+  std::string RtspUrl() const;
+
  private:
   std::vector<DeviceInfo> devices_;
   std::unique_ptr<VideoSource> source_;
@@ -70,6 +79,9 @@ class AppController {
   std::string status_ = "idle";
   std::string active_device_;
   DisplayStats display_stats_;
+#ifdef XMCAM_WITH_RTSP_SERVER
+  std::unique_ptr<RtspSink> rtsp_;
+#endif
 };
 
 }  // namespace xmotion

@@ -26,6 +26,7 @@ class PipelinePanel : public quickviz::Panel {
   char buffer_[2048];
   std::string validate_msg_;
   bool validate_ok_ = false;
+  int export_port_ = 8554;
 };
 
 }  // namespace xmotion

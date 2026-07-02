@@ -9,10 +9,12 @@
 #ifndef XMCAM_PIPELINE_VIDEO_SOURCE_HPP
 #define XMCAM_PIPELINE_VIDEO_SOURCE_HPP
 
+#include <atomic>
 #include <string>
 
 #include "core/data_stream.hpp"  // quickviz header-only DataStream<T>
 
+#include "xmcam/core/frame_sink.hpp"
 #include "xmcam/core/result.hpp"
 #include "xmcam/core/source_caps.hpp"
 #include "xmcam/core/source_descriptor.hpp"
@@ -53,6 +55,19 @@ class VideoSource {
 
   // Non-null only for sources with tunable controls (V4L2).
   virtual ControlSet* Controls() { return nullptr; }
+
+  // Optional tee: every produced frame is also delivered to this sink (e.g.
+  // RtspSink). Thread-safe to set from another thread while capturing.
+  void SetFrameSink(FrameSink* sink) { frame_sink_.store(sink); }
+
+ protected:
+  // Concrete sources call this for each frame before pushing to the stream.
+  void EmitFrame(const VideoFrame& f) {
+    if (FrameSink* s = frame_sink_.load()) s->OnFrame(f);
+  }
+
+ private:
+  std::atomic<FrameSink*> frame_sink_{nullptr};
 };
 
 }  // namespace xmotion

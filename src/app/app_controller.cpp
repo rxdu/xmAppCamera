@@ -109,7 +109,52 @@ Status AppController::StartGst(const std::string& pipeline) {
 #endif
 }
 
+Status AppController::StartRtspExport(int port, const std::string& mount) {
+#ifdef XMCAM_WITH_RTSP_SERVER
+  if (!source_) return Err(ErrorCode::kInvalidArgument, "no active source");
+  StopRtspExport();
+  rtsp_ = std::make_unique<RtspSink>();
+  if (auto st = rtsp_->Start(port, mount); !st.ok()) {
+    rtsp_.reset();
+    return st;
+  }
+  source_->SetFrameSink(rtsp_.get());
+  return Ok();
+#else
+  (void)port;
+  (void)mount;
+  return Err(ErrorCode::kUnsupported, "RTSP export not built");
+#endif
+}
+
+void AppController::StopRtspExport() {
+#ifdef XMCAM_WITH_RTSP_SERVER
+  if (source_) source_->SetFrameSink(nullptr);
+  if (rtsp_) {
+    rtsp_->Stop();
+    rtsp_.reset();
+  }
+#endif
+}
+
+bool AppController::RtspExporting() const {
+#ifdef XMCAM_WITH_RTSP_SERVER
+  return rtsp_ && rtsp_->running();
+#else
+  return false;
+#endif
+}
+
+std::string AppController::RtspUrl() const {
+#ifdef XMCAM_WITH_RTSP_SERVER
+  return rtsp_ ? rtsp_->url() : std::string();
+#else
+  return std::string();
+#endif
+}
+
 void AppController::StopSource() {
+  StopRtspExport();  // detach + stop the sink before the source goes away
   if (source_) {
     source_->Stop();
     source_->Close();

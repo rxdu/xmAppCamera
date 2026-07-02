@@ -64,6 +64,22 @@ void PipelinePanel::Draw() {
           validate_msg_.c_str());
     }
 #endif
+
+    ImGui::Separator();
+    ImGui::TextWrapped("Re-export the active source as RTSP/H.264:");
+#ifdef XMCAM_WITH_RTSP_SERVER
+    ImGui::SetNextItemWidth(120);
+    ImGui::InputInt("port", &export_port_);
+    if (!app_->RtspExporting()) {
+      if (ImGui::Button("Start RTSP export"))
+        app_->StartRtspExport(export_port_, "/cam");
+    } else {
+      if (ImGui::Button("Stop RTSP export")) app_->StopRtspExport();
+      ImGui::TextColored(ImVec4(0, 1, 0, 1), "%s", app_->RtspUrl().c_str());
+    }
+#else
+    ImGui::TextDisabled("built without gst-rtsp-server");
+#endif
   }
   End();
 }

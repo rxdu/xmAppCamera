@@ -50,6 +50,21 @@ if(XMCAM_WITH_GSTREAMER)
   endif()
 endif()
 
+# Optional: RTSP re-export (Phase 5) needs gst-rtsp-server.
+if(XMCAM_WITH_GSTREAMER)
+  pkg_check_modules(GST_RTSP IMPORTED_TARGET gstreamer-rtsp-server-1.0)
+  if(GST_RTSP_FOUND)
+    set(XMCAM_WITH_RTSP_SERVER ON)
+    # Global (not per-target): AppController's layout depends on it and the UI
+    # includes that header, so every TU must agree.
+    add_compile_definitions(XMCAM_WITH_RTSP_SERVER=1)
+  else()
+    message(STATUS "gstreamer-rtsp-server not found — RTSP re-export disabled "
+                   "(install libgstrtspserver-1.0-dev).")
+    set(XMCAM_WITH_RTSP_SERVER OFF)
+  endif()
+endif()
+
 # --- yaml-cpp ------------------------------------------------------------------
 find_package(yaml-cpp REQUIRED)
 

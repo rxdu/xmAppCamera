@@ -107,6 +107,7 @@ void GstSource::PullLoop() {
         stats_.frames = rate_.count();
         stats_.decoder = "gstreamer";
       }
+      EmitFrame(f);
       frames_.Push(std::move(f));
     }
     gst_sample_unref(sample);

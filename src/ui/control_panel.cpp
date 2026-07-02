@@ -4,6 +4,8 @@
  */
 #include "xmcam/ui/control_panel.hpp"
 
+#include <algorithm>
+
 #include "imgui.h"
 
 #include "xmcam/ui/widgets.hpp"
@@ -77,6 +79,17 @@ void ControlPanel::Draw() {
     }
     ImGui::Separator();
 
+    // Left-side labels for the control widgets too. Names vary widely
+    // ("Hue" vs "White Balance Temperature"), so size the label column to
+    // the longest visible name, capped at ~half the panel width.
+    float label_col = 0.0f;
+    for (const auto& c : cs->controls())
+      if (!c.IsDisabled())
+        label_col =
+            std::max(label_col, ImGui::CalcTextSize(c.name.c_str()).x);
+    label_col = std::min(label_col + 12.0f,
+                         ImGui::GetContentRegionAvail().x * 0.55f);
+
     bool changed = false;
     for (const auto& c : cs->controls()) {
       if (c.IsDisabled()) continue;
@@ -86,11 +99,12 @@ void ControlPanel::Draw() {
       const bool locked = c.IsInactive() || c.IsReadOnly();
       if (locked) ImGui::BeginDisabled();
 
+      FieldLabel(c.name.c_str(), label_col);
       int64_t& val = values_[c.id];
       switch (c.type) {
         case ControlType::kBoolean: {
           bool b = val != 0;
-          if (ImGui::Checkbox(c.name.c_str(), &b)) {
+          if (ImGui::Checkbox("##v", &b)) {
             val = b ? 1 : 0;
             changed |= cs->Set(c.id, val).ok();
           }
@@ -102,7 +116,7 @@ void ControlPanel::Draw() {
           const char* cur = "?";
           for (const auto& m : c.menu)
             if (m.value == val) cur = m.label.c_str();
-          if (ImGui::BeginCombo(c.name.c_str(), cur)) {
+          if (ImGui::BeginCombo("##v", cur)) {
             int mi = 0;
             for (const auto& m : c.menu) {
               ImGui::PushID(mi++);
@@ -117,7 +131,7 @@ void ControlPanel::Draw() {
           break;
         }
         case ControlType::kButton: {
-          if (ImGui::Button(c.name.c_str())) {
+          if (ImGui::Button("Trigger##v")) {
             if (Status st = cs->Set(c.id, 1); !st.ok())
               XLOG_WARN("control '{}' trigger failed: {}", c.name,
                         st.message());
@@ -126,8 +140,7 @@ void ControlPanel::Draw() {
         }
         default: {  // integer-like
           int iv = static_cast<int>(val);
-          if (ImGui::SliderInt(c.name.c_str(), &iv,
-                               static_cast<int>(c.minimum),
+          if (ImGui::SliderInt("##v", &iv, static_cast<int>(c.minimum),
                                static_cast<int>(c.maximum))) {
             val = iv;
             changed |= cs->Set(c.id, val).ok();

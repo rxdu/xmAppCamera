@@ -77,7 +77,7 @@ bool DevicePanel::DrawSlot(Slot& slot, int index) {
   if (!open) return keep;
 
   ImGui::PushID(index);
-  ImGui::Indent();
+
 
   // Device picker: enumerated devices not claimed by another slot.
   FieldLabel("Device");
@@ -214,7 +214,7 @@ bool DevicePanel::DrawSlot(Slot& slot, int index) {
     }
   }
 
-  ImGui::Unindent();
+
   ImGui::PopID();
   return keep;
 }

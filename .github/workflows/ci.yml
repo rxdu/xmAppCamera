@@ -34,7 +34,7 @@ jobs:
             gstreamer1.0-libav
 
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DXMCAM_BUILD_GUI=ON -DXMCAM_BUILD_TESTS=ON
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DXMCAM_BUILD_GUI=ON -DXMCAM_BUILD_TESTS=ON -DXMCAM_WERROR=ON
 
       - name: Build
         run: cmake --build build -j"$(nproc)"

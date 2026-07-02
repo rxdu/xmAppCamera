@@ -1,4 +1,4 @@
-add_compile_options(-Wall -Wextra)
+add_compile_options(${XMCAM_WARNING_FLAGS})
 include(GoogleTest)
 add_subdirectory(core)
 add_subdirectory(pipeline)

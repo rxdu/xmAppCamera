@@ -17,6 +17,13 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 option(XMCAM_BUILD_GUI "Build the GUI (needs quickviz/GLFW/GLM/Cairo)" ON)
 option(XMCAM_WITH_GSTREAMER "Enable GStreamer sources + MJPEG decode" ON)
 option(XMCAM_BUILD_TESTS "Build unit tests" ON)
+option(XMCAM_WERROR "Treat warnings as errors in our code (CI gate)" OFF)
+
+# Warning flags for OUR code only (src/, tools/, test/); third_party is exempt.
+set(XMCAM_WARNING_FLAGS -Wall -Wextra)
+if(XMCAM_WERROR)
+  list(APPEND XMCAM_WARNING_FLAGS -Werror)
+endif()
 
 find_package(Threads REQUIRED)
 find_package(PkgConfig REQUIRED)
@@ -83,6 +90,17 @@ if(XMCAM_BUILD_GUI AND NOT TARGET quickviz)
   # out of our dependency graph.
   set(ENABLE_AUTO_LAYOUT OFF CACHE BOOL "" FORCE)
   add_subdirectory(third_party/quickviz EXCLUDE_FROM_ALL)
+
+  # Treat quickviz headers as system includes: their warnings (unused params
+  # in inline handlers etc.) must not trip our -Wall/-Werror when compiled
+  # inside our translation units.
+  foreach(qv_target viewer core imcore stb glad)
+    if(TARGET ${qv_target})
+      set_target_properties(${qv_target} PROPERTIES
+        INTERFACE_SYSTEM_INCLUDE_DIRECTORIES
+        $<TARGET_PROPERTY:${qv_target},INTERFACE_INCLUDE_DIRECTORIES>)
+    endif()
+  endforeach()
 endif()
 
 add_subdirectory(src)

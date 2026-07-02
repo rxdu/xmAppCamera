@@ -17,6 +17,7 @@
 #include "xmcam/ui/device_panel.hpp"
 #include "xmcam/ui/pipeline_panel.hpp"
 #include "xmcam/ui/preview_panel.hpp"
+#include "xmcam/ui/qualify_panel.hpp"
 #include "xmcam/ui/stats_panel.hpp"
 
 namespace xmotion {
@@ -32,6 +33,7 @@ class MainDockingPanel : public quickviz::Panel {
   ControlPanel control_;
   PipelinePanel pipeline_;
   StatsPanel stats_;
+  QualifyPanel qualify_;
 
   unsigned dockspace_id_ = 0;
   bool layout_initialized_ = false;

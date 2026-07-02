@@ -4,6 +4,7 @@ add_subdirectory(core)
 add_subdirectory(pipeline)
 add_subdirectory(control)
 add_subdirectory(export)
+add_subdirectory(qualify)
 
 if(XMCAM_BUILD_GUI)
   add_subdirectory(ui)

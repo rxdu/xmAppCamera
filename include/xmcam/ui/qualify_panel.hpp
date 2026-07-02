@@ -45,6 +45,8 @@ class QualifyPanel : public quickviz::Panel {
   AppController* app_;
   FrameTap tap_;
   bool tap_attached_ = false;
+  bool auto_run_pending_ = false;  // XMCAM_AUTOQUALIFY headless-test hook
+  bool auto_export_ = false;
 
   std::thread worker_;
   std::atomic<bool> worker_busy_{false};

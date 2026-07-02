@@ -45,3 +45,10 @@ Tracks WHAT, not HOW. Status: `[ ]` todo · `[~]` in progress · `[x]` done. See
 - [x] `FrameSink` tee wired into `VideoSource` (EmitFrame; non-blocking contract)
 - [x] `RtspSink`: appsrc (backpressure-dropping) → x264enc → rtph264pay → in-process gst-rtsp-server mount; GUI start/stop + URL
 - [x] E2E verify with a GStreamer client (150 H.264 frames consumed from rtsp://127.0.0.1:8554/cam while preview held ~66fps)
+
+## Phase 6 — Production qualification (checklist integration)
+- [x] Hot-plug auto-recovery in `V4l2Source` (ENODEV → re-open via by-id, backoff, generation counter; controls rebuilt via epoch)
+- [x] `qualify/` backend: FrameTap, control-lock/AWB checks, timestamp stability, platform+firmware identity (sysfs), image fingerprint, YAML+MD report writers (14 tests)
+- [x] QualifyPanel: automated run, power-cycle identity + disconnect-recovery operator checks, vendor/procurement record fields, report export; XMCAM_AUTOQUALIFY hook
+- [x] Verified on camera: platform/enumeration/exposure-lock/gain-lock/AWB-disable/timestamps all PASS (fw 32e4:0234 bcdDevice 0237; 11.34ms ±1.5ms intervals)
+- [ ] Operator-in-the-loop checks exercised with a physical unplug (user)

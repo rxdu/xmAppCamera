@@ -8,6 +8,7 @@
 
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <ctime>
 
 #include "imgui.h"
@@ -42,6 +43,12 @@ std::string NowIso() {
 QualifyPanel::QualifyPanel(AppController* app)
     : quickviz::Panel("Qualify"), app_(app) {
   this->SetAutoLayout(false);
+  // Headless-test hook: run the automated checks (and export the report) as
+  // soon as a source is streaming, without operator clicks.
+  if (std::getenv("XMCAM_AUTOQUALIFY")) {
+    auto_run_pending_ = true;
+    auto_export_ = true;
+  }
 }
 
 QualifyPanel::~QualifyPanel() {
@@ -83,8 +90,7 @@ void QualifyPanel::StartAutomatedRun() {
 
   worker_busy_.store(true);
   const std::string device = app_->active_device();
-  const double nominal_fps = app_->Stats().capture_fps;
-  worker_ = std::thread([this, device, nominal_fps] {
+  worker_ = std::thread([this, device] {
     // 1. Platform + firmware identity.
     QualCheckResult pr{"platform", "Platform & firmware identity",
                        QualStatus::kRunning, "", {}};
@@ -134,13 +140,16 @@ void QualifyPanel::StartAutomatedRun() {
                                  2000));
     }
 
-    // 6. Timestamp stability over a 3s window.
+    // 6. Timestamp stability over a 3s window. The nominal rate is read
+    // AFTER the window: at run start (right after autostart) the smoothed
+    // capture_fps may still be 0.
     if (!abort_.load()) {
-      PutResult({"timestamps", "Timestamp stability", QualStatus::kRunning,
-                 "sampling 3s...", {}});
+      PutResult({"timestamp_stability", "Timestamp stability",
+                 QualStatus::kRunning, "sampling 3s...", {}});
       tap_.Reset();
       std::this_thread::sleep_for(std::chrono::seconds(3));
       const auto snap = tap_.Take();
+      const double nominal_fps = app_->Stats().capture_fps;
       PutResult(CheckTimestampStability(snap.pts_ns, nominal_fps));
     }
 
@@ -273,7 +282,18 @@ void QualifyPanel::Draw() {
   Begin();
   {
     // Reap a finished worker so the tap detaches promptly.
-    if (!worker_busy_.load() && worker_.joinable()) JoinWorker();
+    if (!worker_busy_.load() && worker_.joinable()) {
+      JoinWorker();
+      if (auto_export_ && !results_.empty()) {
+        auto_export_ = false;
+        ExportReport();
+      }
+    }
+    if (auto_run_pending_ && app_->IsRunning() && app_->Controls() &&
+        !worker_busy_.load()) {
+      auto_run_pending_ = false;
+      StartAutomatedRun();
+    }
 
     if (!app_->IsRunning() || !app_->Controls()) {
       ImGui::TextWrapped(

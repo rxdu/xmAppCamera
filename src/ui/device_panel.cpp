@@ -230,7 +230,7 @@ bool DevicePanel::DrawSlot(Slot& slot, int index) {
           ImGui::TextColored(kTextPending, "pending: %s %dx%d @%.0f - Apply",
                              ToString(fmt.format), sz.width, sz.height,
                              sel_fps);
-        DrawSourceStatsBlock(*session);
+        if (!app_->stats_overlay) DrawSourceStatsBlock(*session);
       } else if (!slot.error.empty()) {
         StatusLine(kTextError, "ERROR", slot.error.c_str());
       } else {

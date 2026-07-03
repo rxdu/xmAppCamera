@@ -175,7 +175,7 @@ bool PipelinePanel::DrawSlot(Slot& slot, int index) {
         if (dirty)
           ImGui::TextColored(kTextPending,
                              "pending: settings edited - Apply");
-        DrawSourceStatsBlock(*gs);
+        if (!app_->stats_overlay) DrawSourceStatsBlock(*gs);
         break;
       case GstSource::State::kError:
         StatusLine(kTextError, "ERROR", src->last_error().c_str());

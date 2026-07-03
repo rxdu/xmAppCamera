@@ -117,6 +117,44 @@ void PreviewPanel::DrawTile(AppController::Session& s, Tile& tile,
   dl->AddText(ImVec2(cell_max.x - rsz.x - 6, cell_min.y + 2),
               ImGui::GetColorU32(kTextLive), right);
 
+  // Live stats overlay (translucent block under the header).
+  if (app_->stats_overlay && s.source) {
+    const SourceStats st = s.source->GetStats();
+    const AppController::DisplayStats& d = s.display_stats;
+    const uint64_t dropped =
+        st.frames > d.frames_shown ? st.frames - d.frames_shown : 0;
+    char l1[96], l2[96], l3[96];
+    snprintf(l1, sizeof l1, "cap %.1f  disp %.1f fps", st.capture_fps,
+             d.display_fps);
+    snprintf(l2, sizeof l2, "drop %llu  dec %.1fms  up %.2fms",
+             static_cast<unsigned long long>(dropped), st.decode_ms,
+             d.upload_ms);
+    if (d.latency_ms > 0)
+      snprintf(l3, sizeof l3, "lat %.0fms  %s", d.latency_ms,
+               st.decoder.c_str());
+    else
+      snprintf(l3, sizeof l3, "%s", st.decoder.c_str());
+
+    const float lh = ImGui::GetTextLineHeight();
+    const int extra = (st.device_lost || st.generation > 0) ? 1 : 0;
+    const ImVec2 p0{cell_min.x + 6, cell_min.y + header_h + 4};
+    const ImVec2 p1{p0.x + 210.0f, p0.y + lh * (3 + extra) + 8};
+    dl->AddRectFilled(p0, p1, IM_COL32(0, 0, 0, 150), 4.0f);
+    const ImU32 col = IM_COL32(220, 220, 220, 255);
+    dl->AddText(ImVec2(p0.x + 5, p0.y + 3), col, l1);
+    dl->AddText(ImVec2(p0.x + 5, p0.y + 3 + lh), col, l2);
+    dl->AddText(ImVec2(p0.x + 5, p0.y + 3 + 2 * lh), col, l3);
+    if (st.device_lost)
+      dl->AddText(ImVec2(p0.x + 5, p0.y + 3 + 3 * lh),
+                  ImGui::GetColorU32(kTextError), "DEVICE LOST - recovering");
+    else if (st.generation > 0) {
+      char l4[48];
+      snprintf(l4, sizeof l4, "recovered %u time(s)", st.generation);
+      dl->AddText(ImVec2(p0.x + 5, p0.y + 3 + 3 * lh),
+                  ImGui::GetColorU32(kTextPending), l4);
+    }
+  }
+
   // Selection border (thin neutral border otherwise).
   dl->AddRect(cell_min, cell_max,
               ImGui::GetColorU32(selected ? kTextPending
@@ -168,8 +206,12 @@ void PreviewPanel::Draw() {
       shown = live;
     }
 
+    ImGui::Checkbox("stats overlay", &app_->stats_overlay);
+    ItemTip("Show live stats on each tile; untick to move them back to the\n"
+            "Device / Network Stream blocks");
     // Gesture hints: the tile interactions are otherwise invisible.
     if (live.size() > 1) {
+      ImGui::SameLine();
       if (!solo_key_.empty())
         Caption("double-click: back to grid");
       else

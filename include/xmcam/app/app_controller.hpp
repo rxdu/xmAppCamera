@@ -81,6 +81,10 @@ class AppController {
   AppController() = default;
   ~AppController();
 
+  // UI preference: draw live stats on the preview tiles (default) instead of
+  // in the sidebar blocks. Owned here so all panels agree.
+  bool stats_overlay = true;
+
   // --- device discovery ---
   const std::vector<DeviceInfo>& RefreshDevices();
   const std::vector<DeviceInfo>& devices() const { return devices_; }

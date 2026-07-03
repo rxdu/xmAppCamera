@@ -63,6 +63,7 @@ class AppController {
     ActiveV4l2Config config;               // v4l2 only
     std::string pipeline;                  // gst only
     DisplayStats display_stats;
+    bool stats_overlay = true;  // draw live stats on this session's tile
     int controls_epoch = 0;
     uint32_t last_generation = 0;
     // Frame tee: RTSP export, file recorder and the qualification tap all
@@ -80,10 +81,6 @@ class AppController {
 
   AppController() = default;
   ~AppController();
-
-  // UI preference: draw live stats on the preview tiles (default) instead of
-  // in the sidebar blocks. Owned here so all panels agree.
-  bool stats_overlay = true;
 
   // --- device discovery ---
   const std::vector<DeviceInfo>& RefreshDevices();

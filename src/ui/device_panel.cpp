@@ -10,7 +10,6 @@
 
 #include "imgui.h"
 
-#include "xmcam/ui/stats_view.hpp"
 #include "xmcam/ui/widgets.hpp"
 #include "xmsigma/logging/xlogger.hpp"
 
@@ -217,24 +216,29 @@ bool DevicePanel::DrawSlot(Slot& slot, int index) {
         if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
       }
+      // Per-camera stats-overlay toggle + right-aligned live status, all on
+      // the button row (stats themselves live on the preview tile).
+      if (session) {
+        ImGui::SameLine();
+        ImGui::Checkbox("overlay", &session->stats_overlay);
+        ItemTip("Show this camera's live stats on its preview tile");
+      }
+      if (running)
+        StatusRight(kTextLive, "LIVE", NodeName(dev->device).c_str());
+      else if (slot.error.empty())
+        StatusRight(kTextIdle, "IDLE");
 
-      // Status + live stats for this slot's camera.
+      // Below the buttons only what matters: the pending delta and errors
+      // (live status sits right-aligned on the button row; stats live on
+      // the preview tile overlay).
       session = app_->FindSession(dev->device);
       if (session && session->IsRunning()) {
-        StatusLine(kTextLive, "LIVE", NodeName(dev->device).c_str());
-        ImGui::Bullet();
-        ImGui::Text("%s %dx%d @ %.0f fps", ToString(session->config.format),
-                    session->config.width, session->config.height,
-                    session->config.fps);
         if (dirty)
           ImGui::TextColored(kTextPending, "pending: %s %dx%d @%.0f - Apply",
                              ToString(fmt.format), sz.width, sz.height,
                              sel_fps);
-        if (!app_->stats_overlay) DrawSourceStatsBlock(*session);
       } else if (!slot.error.empty()) {
         StatusLine(kTextError, "ERROR", slot.error.c_str());
-      } else {
-        StatusLine(kTextIdle, "IDLE");
       }
     }
   }

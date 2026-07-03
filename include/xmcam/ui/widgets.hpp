@@ -59,6 +59,27 @@ inline void Caption(const char* text) {
   ImGui::PopStyleColor();
 }
 
+// Right-aligned status dot+label on the CURRENT line (e.g. after buttons).
+inline void StatusRight(const ImVec4& color, const char* label,
+                        const char* detail = nullptr) {
+  const float h = ImGui::GetTextLineHeight();
+  const float r = h * 0.28f;
+  float w = 2 * r + 6.0f + ImGui::CalcTextSize(label).x;
+  if (detail && detail[0])
+    w += ImGui::GetStyle().ItemSpacing.x + ImGui::CalcTextSize(detail).x;
+  ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - w);
+  const ImVec2 p = ImGui::GetCursorScreenPos();
+  ImGui::GetWindowDrawList()->AddCircleFilled(
+      ImVec2(p.x + r + 1.0f, p.y + h * 0.55f), r, ImGui::GetColorU32(color));
+  ImGui::Dummy(ImVec2(r * 2.0f + 6.0f, h));
+  ImGui::SameLine(0.0f, 0.0f);
+  ImGui::TextColored(color, "%s", label);
+  if (detail && detail[0]) {
+    ImGui::SameLine();
+    ImGui::TextDisabled("%s", detail);
+  }
+}
+
 // Left-side field label (GUI convention; ImGui defaults to right labels):
 // draws the label, then aligns the next widget at a fixed column taking the
 // remaining width. Use with "##id" widget labels to suppress the right label.

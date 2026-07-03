@@ -9,7 +9,6 @@
 
 #include "imgui.h"
 
-#include "xmcam/ui/stats_view.hpp"
 #include "xmcam/ui/widgets.hpp"
 
 #ifdef XMCAM_WITH_GSTREAMER
@@ -159,6 +158,11 @@ bool PipelinePanel::DrawSlot(Slot& slot, int index) {
   }
   ImGui::SameLine();
   if (ImGui::Button("Remove")) keep = false;
+  if (gs) {
+    ImGui::SameLine();
+    ImGui::Checkbox("overlay", &gs->stats_overlay);
+    ItemTip("Show this stream's live stats on its preview tile");
+  }
 
   // Connection state from the pipeline bus: RTSP failures (bad credentials,
   // unreachable host, codec mismatch) arrive here, not at Play time.
@@ -175,7 +179,6 @@ bool PipelinePanel::DrawSlot(Slot& slot, int index) {
         if (dirty)
           ImGui::TextColored(kTextPending,
                              "pending: settings edited - Apply");
-        if (!app_->stats_overlay) DrawSourceStatsBlock(*gs);
         break;
       case GstSource::State::kError:
         StatusLine(kTextError, "ERROR", src->last_error().c_str());

@@ -87,6 +87,8 @@ void PreviewPanel::DrawTile(AppController::Session& s, Tile& tile,
   const ImVec2 vid_min{cell_min.x + 2, cell_min.y + header_h};
   const ImVec2 vid_max{cell_max.x - 2, cell_max.y - 2};
 
+  ImVec2 img_min{0, 0};
+  bool have_img = false;
   if (tile.have_frame && tile.display_tex != 0 && tile.w > 0) {
     // Aspect-fit the frame into the video region.
     const float avail_w = vid_max.x - vid_min.x;
@@ -102,6 +104,8 @@ void PreviewPanel::DrawTile(AppController::Session& s, Tile& tile,
     dl->AddImage(reinterpret_cast<void*>(
                      static_cast<intptr_t>(tile.display_tex)),
                  ImVec2(x0, y0), ImVec2(x0 + w, y0 + h));
+    img_min = ImVec2(x0, y0);
+    have_img = true;
   } else {
     dl->AddText(ImVec2(cell_min.x + 8, cell_min.y + header_h + 8),
                 ImGui::GetColorU32(kTextIdle), "waiting for frames...");
@@ -117,8 +121,9 @@ void PreviewPanel::DrawTile(AppController::Session& s, Tile& tile,
   dl->AddText(ImVec2(cell_max.x - rsz.x - 6, cell_min.y + 2),
               ImGui::GetColorU32(kTextLive), right);
 
-  // Live stats overlay (translucent block under the header).
-  if (app_->stats_overlay && s.source) {
+  // Live stats overlay: a translucent card ON the video itself (top-left of
+  // the displayed image), like an OSD — it never consumes layout space.
+  if (s.stats_overlay && s.source && have_img) {
     const SourceStats st = s.source->GetStats();
     const AppController::DisplayStats& d = s.display_stats;
     const uint64_t dropped =
@@ -137,7 +142,7 @@ void PreviewPanel::DrawTile(AppController::Session& s, Tile& tile,
 
     const float lh = ImGui::GetTextLineHeight();
     const int extra = (st.device_lost || st.generation > 0) ? 1 : 0;
-    const ImVec2 p0{cell_min.x + 6, cell_min.y + header_h + 4};
+    const ImVec2 p0{img_min.x + 6, img_min.y + 6};
     const ImVec2 p1{p0.x + 210.0f, p0.y + lh * (3 + extra) + 8};
     dl->AddRectFilled(p0, p1, IM_COL32(0, 0, 0, 150), 4.0f);
     const ImU32 col = IM_COL32(220, 220, 220, 255);
@@ -206,12 +211,8 @@ void PreviewPanel::Draw() {
       shown = live;
     }
 
-    ImGui::Checkbox("stats overlay", &app_->stats_overlay);
-    ItemTip("Show live stats on each tile; untick to move them back to the\n"
-            "Device / Network Stream blocks");
     // Gesture hints: the tile interactions are otherwise invisible.
     if (live.size() > 1) {
-      ImGui::SameLine();
       if (!solo_key_.empty())
         Caption("double-click: back to grid");
       else

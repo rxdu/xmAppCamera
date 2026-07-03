@@ -121,7 +121,7 @@ void PreviewPanel::DrawTile(AppController::Session& s, Tile& tile,
     const ImU32 col_dim = IM_COL32(160, 160, 160, 255);
     const ImU32 col_title = ImGui::GetColorU32(kTextLive);
 
-    char sub[96];
+    char sub[32];
     snprintf(sub, sizeof sub, "%dx%d", tile.w, tile.h);
 
     if (!s.stats_overlay) {
@@ -142,7 +142,7 @@ void PreviewPanel::DrawTile(AppController::Session& s, Tile& tile,
       const uint64_t dropped =
           st.frames > d.frames_shown ? st.frames - d.frames_shown : 0;
 
-      char mode[96];
+      char mode[160];
       snprintf(mode, sizeof mode, "%s   %s", sub,
                st.decoder.empty() ? "-" : st.decoder.c_str());
 

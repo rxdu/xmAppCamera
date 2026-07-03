@@ -161,7 +161,13 @@ bool PipelinePanel::DrawSlot(Slot& slot, int index) {
   if (gs) {
     ImGui::SameLine();
     ImGui::Checkbox("Stats Overlay", &gs->stats_overlay);
-    ItemTip("Show this stream's live stats on its preview tile");
+    ItemTip("Show live stats on this stream's preview tile:\n"
+            "  capture  frames/s decoded from the stream\n"
+            "  display  frames/s actually rendered\n"
+            "  dropped  decoded but never shown (latest-frame preview)\n"
+            "  decode/upload  per-frame processing times\n"
+            "  (no latency row: network timestamps aren't comparable\n"
+            "   to the local clock)");
   }
 
   // Connection state from the pipeline bus: RTSP failures (bad credentials,

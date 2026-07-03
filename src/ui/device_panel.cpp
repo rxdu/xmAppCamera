@@ -221,7 +221,13 @@ bool DevicePanel::DrawSlot(Slot& slot, int index) {
       if (session) {
         ImGui::SameLine();
         ImGui::Checkbox("Stats Overlay", &session->stats_overlay);
-        ItemTip("Show this camera's live stats on its preview tile");
+        ItemTip("Show live stats on this camera's preview tile:\n"
+                "  capture  frames/s delivered by the camera\n"
+                "  display  frames/s actually rendered\n"
+                "  dropped  captured but never shown (latest-frame preview)\n"
+                "  decode   MJPEG/H264 -> pixels time, per frame\n"
+                "  upload   CPU -> GPU texture time, per frame\n"
+                "  latency  capture-to-display estimate (excl. monitor)");
       }
       if (running)
         StatusRight(kTextLive, "LIVE");

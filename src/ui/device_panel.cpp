@@ -229,10 +229,6 @@ bool DevicePanel::DrawSlot(Slot& slot, int index) {
                 "  upload   CPU -> GPU texture time, per frame\n"
                 "  latency  capture-to-display estimate (excl. monitor)");
       }
-      if (running)
-        StatusRight(kTextLive, "LIVE");
-      else if (slot.error.empty())
-        StatusRight(kTextIdle, "IDLE");
 
       // Below the buttons only what matters: the pending delta and errors
       // (live status sits right-aligned on the button row; stats live on

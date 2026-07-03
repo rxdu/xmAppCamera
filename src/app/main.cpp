@@ -34,6 +34,10 @@ int main() {
   // Breathing room inside panels: keep content off the panel borders.
   // (The root dock-host window opts out so the dockspace stays flush.)
   ImGui::GetStyle().WindowPadding = ImVec2(10.0f, 8.0f);
+  // Drop the triangle "window menu" button from dock-node tab bars (its only
+  // action is "Hide tab bar", which would strand users with no way back).
+  // Tab labels are unaffected.
+  ImGui::GetStyle().WindowMenuButtonPosition = ImGuiDir_None;
 
   // One root panel fills the window and lays out the sidebar + preview.
   viewer.AddSceneObject(std::make_shared<MainDockingPanel>(&app));

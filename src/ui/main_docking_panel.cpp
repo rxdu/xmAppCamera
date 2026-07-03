@@ -39,7 +39,12 @@ void MainDockingPanel::Draw() {
   ImGui::PopStyleVar();
   {
     dockspace_id_ = ImGui::GetID("xmCamDockSpace");
-    ImGui::DockSpace(dockspace_id_, ImVec2(0, 0), ImGuiDockNodeFlags_None);
+    // Fixed layout, flexible sizing: panels cannot be torn out or
+    // rearranged (NoUndocking/NoSplit), but the splitters between them stay
+    // draggable (NoResize deliberately NOT set).
+    ImGui::DockSpace(dockspace_id_, ImVec2(0, 0),
+                     ImGuiDockNodeFlags_NoUndocking |
+                         ImGuiDockNodeFlags_NoSplit);
 
     if (!layout_initialized_) {
       layout_initialized_ = true;

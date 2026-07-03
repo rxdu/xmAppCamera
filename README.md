@@ -54,6 +54,6 @@ To package: `cd build && cpack -G DEB`.
 - [docs/adr/](docs/adr/) — key design decisions and rationale.
 - [docs/design/config-schema.md](docs/design/config-schema.md) — exported config format.
 
----
+## License
 
-Copyright (c) 2026 Ruixiang Du (rdu)
+[Apache License 2.0](LICENSE) — Copyright (c) 2026 Ruixiang Du (rdu)

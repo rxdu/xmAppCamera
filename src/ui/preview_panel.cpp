@@ -72,7 +72,7 @@ void PreviewPanel::DrawTile(AppController::Session& s, Tile& tile,
   const bool selected = selectable && app_->selected_key() == s.key;
 
   // Click/double-click target covering the whole cell. Clicking the already-
-  // selected tile deselects it (Controls/Qualify fall back to the first
+  // selected tile deselects it (Controls/Checks fall back to the first
   // running camera), so the highlight can be dismissed.
   ImGui::SetCursorScreenPos(cell_min);
   ImGui::PushID(s.id);

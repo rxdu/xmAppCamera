@@ -2,7 +2,7 @@
  * @file preview_panel.hpp
  * @brief Tiled live preview of all running sessions. Auto grid (1x1, 2x1,
  *        2x2, ...), per-tile header + fps overlay and selection border.
- *        Click a tile to select its session (drives Controls/Qualify);
+ *        Click a tile to select its session (drives Controls/Checks);
  *        double-click to solo it, double-click again to return to the grid.
  *
  * Copyright (c) 2026 Ruixiang Du (rdu)

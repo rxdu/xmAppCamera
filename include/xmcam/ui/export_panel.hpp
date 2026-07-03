@@ -41,6 +41,10 @@ class ExportPanel : public quickviz::Panel {
   AppController* app_;
   std::unordered_map<std::string, Cfg> cfg_;  // by session key
   int next_port_ = 8554;
+  // Synchronized (group) recording controls.
+  int grp_format = 0;
+  char grp_dir[256] = "recordings";
+  std::string grp_error;
 };
 
 }  // namespace xmotion

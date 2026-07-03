@@ -137,8 +137,16 @@ class AppController {
   void StopRtspExport(Session& s);
 #ifdef XMCAM_WITH_GSTREAMER
   Status StartRecording(Session& s, const std::string& path,
-                        FileSink::Format format);
+                        FileSink::Format format, int64_t epoch_ns = 0);
   void StopRecording(Session& s);
+
+  // Synchronized recording: start every running session's recorder against a
+  // SHARED capture-clock epoch, grouped under <dir>/<stamp>/ with a
+  // manifest.yaml for downstream alignment. Stop halts all of them.
+  Status StartRecordingGroup(const std::string& dir, FileSink::Format format);
+  void StopRecordingGroup();
+  bool GroupRecording() const { return group_recording_; }
+  const std::string& group_dir() const { return group_dir_; }
 #endif
 
   // --- target-camera conveniences (Controls / Qualify panels) ---
@@ -175,6 +183,8 @@ class AppController {
 
   std::vector<DeviceInfo> devices_;
   std::vector<std::unique_ptr<Session>> sessions_;
+  bool group_recording_ = false;
+  std::string group_dir_;
   std::string selected_key_;
   int next_id_ = 1;
 };

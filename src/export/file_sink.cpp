@@ -22,7 +22,8 @@ const char* FileSink::Extension(Format f) {
 
 FileSink::~FileSink() { Stop(); }
 
-Status FileSink::Start(const std::string& path, Format format, double fps) {
+Status FileSink::Start(const std::string& path, Format format, double fps,
+                       int64_t epoch_ns) {
   if (running_.load()) return Ok();
   if (!gst_is_initialized()) gst_init(nullptr, nullptr);
   path_ = path;
@@ -32,6 +33,7 @@ Status FileSink::Start(const std::string& path, Format format, double fps) {
   if (!parent.empty()) std::filesystem::create_directories(parent, ec);
   format_ = format;
   fps_ = fps > 0 ? fps : 30.0;
+  epoch_ns_ = epoch_ns;
   stats_ = Stats{};
   running_.store(true);
   writer_ = std::thread(&FileSink::WriterLoop, this);
@@ -63,8 +65,8 @@ bool FileSink::EnsurePipeline(const Packed& first) {
                                   fps_frac);
     desc = g_strdup_printf(
         "appsrc name=src is-live=true block=true format=time "
-        "do-timestamp=true %s ! matroskamux ! filesink location=\"%s\"",
-        head, path_.c_str());
+        "do-timestamp=%s %s ! matroskamux ! filesink location=\"%s\"",
+        epoch_ns_ ? "false" : "true", head, path_.c_str());
     g_free(head);
   } else {
     std::string encode;
@@ -79,10 +81,11 @@ bool FileSink::EnsurePipeline(const Packed& first) {
     }
     desc = g_strdup_printf(
         "appsrc name=src is-live=true block=true format=time "
-        "do-timestamp=true "
+        "do-timestamp=%s "
         "caps=video/x-raw,format=I420,width=%d,height=%d,framerate=%s ! "
         "%s ! filesink location=\"%s\"",
-        first.width, first.height, fps_frac, encode.c_str(), path_.c_str());
+        epoch_ns_ ? "false" : "true", first.width, first.height, fps_frac,
+        encode.c_str(), path_.c_str());
   }
   GError* err = nullptr;
   pipeline_ = gst_parse_launch(desc, &err);
@@ -109,6 +112,7 @@ void FileSink::OnFrame(const VideoFrame& f) {
   p.fmt = f.format;
   p.width = f.width;
   p.height = f.height;
+  p.pts_ns = f.pts_ns;
 
   if (format_ == Format::kPassthroughMkv) {
     // Passthrough wants the camera's compressed bitstream, nothing else.
@@ -176,6 +180,14 @@ void FileSink::WriterLoop() {
       GstBuffer* buf =
           gst_buffer_new_allocate(nullptr, p.data.size(), nullptr);
       gst_buffer_fill(buf, 0, p.data.data(), p.data.size());
+      if (epoch_ns_ != 0) {
+        // Epoch mode: timeline zero is the shared group epoch, so files
+        // recorded together are aligned by CAPTURE time, not arrival.
+        const int64_t rel = p.pts_ns > epoch_ns_ ? p.pts_ns - epoch_ns_ : 0;
+        GST_BUFFER_PTS(buf) = static_cast<GstClockTime>(rel);
+        GST_BUFFER_DURATION(buf) =
+            static_cast<GstClockTime>(1e9 / fps_);
+      }
       if (gst_app_src_push_buffer(appsrc_, buf) == GST_FLOW_OK) {
         std::lock_guard<std::mutex> lk(mtx_);
         ++stats_.frames_written;

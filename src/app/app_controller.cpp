@@ -5,7 +5,11 @@
 #include "xmcam/app/app_controller.hpp"
 
 #include <algorithm>
+#include <chrono>
+#include <cstdio>
 #include <cstdlib>
+#include <ctime>
+#include <filesystem>
 
 #include "xmsigma/logging/xlogger.hpp"
 
@@ -203,16 +207,88 @@ void AppController::DetachFrameSink(Session& s, FrameSink* sink) {
 
 #ifdef XMCAM_WITH_GSTREAMER
 Status AppController::StartRecording(Session& s, const std::string& path,
-                                     FileSink::Format format) {
+                                     FileSink::Format format,
+                                     int64_t epoch_ns) {
   if (!s.source) return Err(ErrorCode::kInvalidArgument, "session not running");
   StopRecording(s);
   auto rec = std::make_unique<FileSink>();
   const double fps =
       s.kind == SourceKind::kV4l2 && s.config.fps > 0 ? s.config.fps : 30.0;
-  if (auto st = rec->Start(path, format, fps); !st.ok()) return st;
+  if (auto st = rec->Start(path, format, fps, epoch_ns); !st.ok()) return st;
   s.recorder = std::move(rec);
   AttachFrameSink(s, s.recorder.get());
   return Ok();
+}
+
+Status AppController::StartRecordingGroup(const std::string& dir,
+                                          FileSink::Format format) {
+  if (RunningCount() == 0)
+    return Err(ErrorCode::kInvalidArgument, "no running sources to record");
+
+  char stamp[32];
+  std::time_t t = std::time(nullptr);
+  std::strftime(stamp, sizeof stamp, "%Y%m%d_%H%M%S", std::localtime(&t));
+  group_dir_ = dir + "/" + stamp;
+  std::error_code ec;
+  std::filesystem::create_directories(group_dir_, ec);
+
+  // Shared epoch on the capture clock (CLOCK_MONOTONIC == V4L2 timestamps):
+  // every file's timeline zero is this instant, so frames align by CAPTURE
+  // time no matter how many ms apart the recorders actually started.
+  const int64_t epoch =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now().time_since_epoch())
+          .count();
+
+  FILE* mf = std::fopen((group_dir_ + "/manifest.yaml").c_str(), "w");
+  if (mf) {
+    std::fprintf(mf, "session_stamp: %s\nepoch_monotonic_ns: %lld\nfiles:\n",
+                 stamp, static_cast<long long>(epoch));
+  }
+
+  Status first_err = Ok();
+  for (auto& s : sessions_) {
+    if (!s->IsRunning()) continue;
+    // Passthrough only fits compressed USB modes; others fall back to H.264.
+    FileSink::Format f = format;
+    if (f == FileSink::Format::kPassthroughMkv &&
+        !(s->kind == SourceKind::kV4l2 && IsCompressed(s->config.format)))
+      f = FileSink::Format::kH264Mkv;
+    // Network streams carry pipeline-relative timestamps: fall back to
+    // arrival-time stamping (noted in the manifest).
+    const bool epoch_ok = s->kind == SourceKind::kV4l2;
+
+    std::string name = s->key;
+    for (auto& ch : name)
+      if (ch == '/' || ch == ':') ch = '_';
+    const std::string path =
+        group_dir_ + "/" + name + "." + FileSink::Extension(f);
+    if (auto st = StartRecording(*s, path, f, epoch_ok ? epoch : 0);
+        !st.ok() && first_err.ok())
+      first_err = st;
+    if (mf) {
+      std::fprintf(mf,
+                   "  - session: %s\n    label: \"%s\"\n    file: %s.%s\n"
+                   "    sync: %s\n",
+                   s->key.c_str(), s->label.c_str(), name.c_str(),
+                   FileSink::Extension(f),
+                   epoch_ok ? "capture-epoch" : "arrival-time");
+      if (s->kind == SourceKind::kV4l2)
+        std::fprintf(mf, "    config: %s %dx%d @%.0f\n",
+                     ToString(s->config.format), s->config.width,
+                     s->config.height, s->config.fps);
+    }
+  }
+  if (mf) std::fclose(mf);
+  group_recording_ = true;
+  XLOG_INFO("group recording -> {}", group_dir_);
+  return first_err;
+}
+
+void AppController::StopRecordingGroup() {
+  for (auto& s : sessions_) StopRecording(*s);
+  group_recording_ = false;
+  XLOG_INFO("group recording stopped ({})", group_dir_);
 }
 
 void AppController::StopRecording(Session& s) {

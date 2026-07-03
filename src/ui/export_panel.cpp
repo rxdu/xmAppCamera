@@ -151,6 +151,57 @@ void ExportPanel::Draw() {
             "at the same time.");
     ImGui::Separator();
 
+    // --- Synchronized recording: one button, all running sources, shared
+    // capture-clock epoch so the files align frame-for-frame. ---
+    ImGui::TextUnformatted("Synchronized recording");
+    ItemTip("Starts/stops recording of EVERY running source together.\n"
+            "USB cameras share one capture-clock epoch, so their files are\n"
+            "temporally aligned; a manifest.yaml describes the group.");
+    const bool grp_rec = app_->GroupRecording();
+    if (grp_rec) ImGui::BeginDisabled();
+    FieldLabel("Format");
+    const char* kGrpFormats[] = {
+        "H.264 MKV (default)",
+        "Passthrough MKV (camera bitstream, no re-encode)",
+        "Lossless MKV (FFV1)", "Raw Y4M (bit-exact, large)"};
+    ImGui::Combo("##grpfmt", &grp_format, kGrpFormats, 4);
+    ItemTip("Applied to every source; passthrough falls back to H.264 for\n"
+            "sources without a compressed USB bitstream");
+    FieldLabel("Directory");
+    ImGui::InputText("##grpdir", grp_dir, sizeof grp_dir);
+    ItemTip("Each run creates <directory>/<timestamp>/ with one file per\n"
+            "source plus manifest.yaml");
+    if (grp_rec) ImGui::EndDisabled();
+
+    if (!grp_rec) {
+      if (AccentButton("  Start all  ", kBtnStart)) {
+        const FileSink::Format fmt =
+            grp_format == 0   ? FileSink::Format::kH264Mkv
+            : grp_format == 1 ? FileSink::Format::kPassthroughMkv
+            : grp_format == 2 ? FileSink::Format::kFfv1Mkv
+                              : FileSink::Format::kY4m;
+        Status st = app_->StartRecordingGroup(grp_dir, fmt);
+        grp_error = st.ok() ? "" : st.message();
+      }
+      if (!grp_error.empty())
+        StatusLine(kTextError, "ERROR", grp_error.c_str());
+    } else {
+      if (AccentButton("  Stop all  ", kBtnStop)) {
+        app_->StopRecordingGroup();
+      } else {
+        StatusLine(kTextError, "REC", app_->group_dir().c_str());
+        for (auto& s : app_->sessions()) {
+          if (!s->recorder || !s->recorder->running()) continue;
+          const auto rst = s->recorder->stats();
+          ImGui::Bullet();
+          ImGui::Text("%s: %llu written / %llu dropped", s->label.c_str(),
+                      static_cast<unsigned long long>(rst.frames_written),
+                      static_cast<unsigned long long>(rst.frames_dropped));
+        }
+      }
+    }
+    ImGui::Separator();
+
     bool any = false;
     for (auto& s : app_->sessions()) {
       if (!s->IsRunning()) continue;

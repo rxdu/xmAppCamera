@@ -45,7 +45,12 @@ class FileSink : public FrameSink {
   ~FileSink() override;
 
   // Opens `path` for writing; fps is stamped into the container timing.
-  Status Start(const std::string& path, Format format, double fps);
+  // `epoch_ns` (optional): when non-zero, buffers are timestamped from the
+  // frames' capture clock relative to this epoch (CLOCK_MONOTONIC ns) —
+  // recordings started with a SHARED epoch are temporally aligned across
+  // cameras. 0 = stamp by arrival time (single-source default).
+  Status Start(const std::string& path, Format format, double fps,
+               int64_t epoch_ns = 0);
   // Finalizes the file (EOS through the muxer) — safe to call twice.
   void Stop();
   bool running() const { return running_.load(); }
@@ -63,6 +68,7 @@ class FileSink : public FrameSink {
     PixelFormat fmt = PixelFormat::kI420;
     int width = 0;
     int height = 0;
+    int64_t pts_ns = 0;  // capture timestamp (epoch mode)
     std::vector<uint8_t> data;
   };
   void WriterLoop();
@@ -71,6 +77,7 @@ class FileSink : public FrameSink {
   std::string path_;
   Format format_ = Format::kH264Mkv;
   double fps_ = 30.0;
+  int64_t epoch_ns_ = 0;
 
   GstElement* pipeline_ = nullptr;
   GstAppSrc* appsrc_ = nullptr;

@@ -79,6 +79,14 @@ int main() {
         !st.ok())
       XLOG_WARN("auto gst: {}", st.message());
   }
+  // Headless-test hook: synchronized group recording of all sources.
+  if (std::getenv("XMCAM_AUTOGROUPREC")) {
+    if (auto st = app.StartRecordingGroup("recordings",
+                                          FileSink::Format::kH264Mkv);
+        !st.ok())
+      XLOG_WARN("auto group record: {}", st.message());
+  }
+
 
   viewer.Show();  // blocking render loop
 

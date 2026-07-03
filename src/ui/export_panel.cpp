@@ -17,12 +17,16 @@ namespace xmotion {
 ExportPanel::ExportPanel(AppController* app)
     : quickviz::Panel("Export"), app_(app) {
   this->SetAutoLayout(false);
+  snprintf(grp_dir, sizeof grp_dir, "%s", DefaultRecordingDir().c_str());
 }
 
 void ExportPanel::DrawRow(AppController::Session& s) {
 #ifdef XMCAM_WITH_RTSP_SERVER
   Cfg& cfg = cfg_[s.key];
   if (cfg.port == 0) cfg.port = next_port_++;  // stable per-session default
+  if (!cfg.rec_dir[0])
+    snprintf(cfg.rec_dir, sizeof cfg.rec_dir, "%s",
+             DefaultRecordingDir().c_str());
   const bool serving = s.rtsp && s.rtsp->running();
 
   char header[160];

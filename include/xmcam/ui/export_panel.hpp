@@ -32,8 +32,8 @@ class ExportPanel : public quickviz::Panel {
     char mount[64] = "/cam";       // URL suffix
     std::string error;
     // File recording
-    int rec_format = 0;          // 0=raw y4m, 1=lossless mkv, 2=h264 mkv
-    char rec_dir[256] = "recordings";
+    int rec_format = 0;  // combo index (0 = H.264 default)
+    char rec_dir[256] = "";  // filled with DefaultRecordingDir() on first use
     std::string rec_error;
   };
   void DrawRow(AppController::Session& s);
@@ -43,7 +43,7 @@ class ExportPanel : public quickviz::Panel {
   int next_port_ = 8554;
   // Synchronized (group) recording controls.
   int grp_format = 0;
-  char grp_dir[256] = "recordings";
+  char grp_dir[256] = "";  // filled with DefaultRecordingDir() in ctor
   std::string grp_error;
 };
 

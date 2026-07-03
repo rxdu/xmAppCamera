@@ -7,6 +7,9 @@
 #ifndef XMCAM_UI_WIDGETS_HPP
 #define XMCAM_UI_WIDGETS_HPP
 
+#include <cstdlib>
+#include <string>
+
 #include "imgui.h"
 
 namespace xmotion {
@@ -33,6 +36,14 @@ inline const ImVec4 kTextLive{0.3f, 1.0f, 0.3f, 1.0f};
 inline const ImVec4 kTextPending{1.0f, 0.75f, 0.25f, 1.0f};
 inline const ImVec4 kTextError{1.0f, 0.4f, 0.4f, 1.0f};
 inline const ImVec4 kTextIdle{0.55f, 0.55f, 0.55f, 1.0f};
+
+// Stable absolute default for recordings: ~/Videos/xmAppCamera (a relative
+// default would move around with the launch directory).
+inline std::string DefaultRecordingDir() {
+  const char* home = std::getenv("HOME");
+  return home ? std::string(home) + "/Videos/xmAppCamera"
+              : std::string("recordings");
+}
 
 // Hover tooltip for the last item — delayed, so it never nags.
 inline void ItemTip(const char* text) {

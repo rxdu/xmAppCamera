@@ -42,7 +42,7 @@ std::string NowIso() {
 }  // namespace
 
 QualifyPanel::QualifyPanel(AppController* app)
-    : quickviz::Panel("Qualify"), app_(app) {
+    : quickviz::Panel("Checks"), app_(app) {
   this->SetAutoLayout(false);
   // Headless-test hook: run the automated checks (and export the report) as
   // soon as a source is streaming, without operator clicks.
@@ -320,14 +320,6 @@ void QualifyPanel::ExportReport() {
     rep.platform = platform_;
     rep.results = results_;
   }
-  rep.manual_fields = {
-      {"firmware_update_freeze_policy", fw_policy_},
-      {"bulk_hardware_revision_guarantee", bulk_rev_},
-      {"lens_part_number", lens_pn_},
-      {"ir_filter_spec", ir_filter_},
-      {"isp_control_documentation", isp_docs_},
-      {"notes", notes_},
-  };
   rep.finished_at = NowIso();
   rep.started_at = rep.finished_at;
 
@@ -415,16 +407,6 @@ void QualifyPanel::Draw() {
           ImGui::Unindent();
         }
       }
-    }
-
-    ImGui::Separator();
-    if (ImGui::CollapsingHeader("Vendor / procurement record")) {
-      ImGui::InputText("FW update/freeze policy", fw_policy_, sizeof fw_policy_);
-      ImGui::InputText("Bulk HW revision guarantee", bulk_rev_, sizeof bulk_rev_);
-      ImGui::InputText("Lens part number", lens_pn_, sizeof lens_pn_);
-      ImGui::InputText("IR-filter spec", ir_filter_, sizeof ir_filter_);
-      ImGui::InputText("ISP control docs", isp_docs_, sizeof isp_docs_);
-      ImGui::InputText("Notes", notes_, sizeof notes_);
     }
 
     if (ImGui::Button("Export report (YAML + Markdown)")) ExportReport();

@@ -58,14 +58,6 @@ class QualifyPanel : public quickviz::Panel {
   std::vector<QualCheckResult> results_;
   PlatformInfo platform_;
   std::string report_msg_;
-
-  // Vendor / procurement answers (manual fields).
-  char fw_policy_[256] = "";
-  char bulk_rev_[256] = "";
-  char lens_pn_[256] = "";
-  char ir_filter_[256] = "";
-  char isp_docs_[256] = "";
-  char notes_[512] = "";
 };
 
 }  // namespace xmotion

@@ -271,7 +271,7 @@ void PreviewPanel::Draw() {
       if (!solo_key_.empty())
         Caption("double-click: back to grid");
       else
-        Caption("click: select (drives Controls/Qualify/Export) - "
+        Caption("click: select (drives Controls/Checks/Export) - "
                 "double-click: solo");
     }
 

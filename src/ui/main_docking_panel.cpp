@@ -60,7 +60,7 @@ void MainDockingPanel::Draw() {
       ImGui::DockBuilderDockWindow("Device", left_top);
       ImGui::DockBuilderDockWindow("Network Stream", left_top);
       ImGui::DockBuilderDockWindow("Controls", left_bottom);
-      ImGui::DockBuilderDockWindow("Qualify", left_bottom);
+      ImGui::DockBuilderDockWindow("Checks", left_bottom);
       ImGui::DockBuilderDockWindow("Export", left_bottom);
       ImGui::DockBuilderDockWindow("Preview", center);
       ImGui::DockBuilderFinish(dockspace_id_);

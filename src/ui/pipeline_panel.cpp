@@ -160,7 +160,7 @@ bool PipelinePanel::DrawSlot(Slot& slot, int index) {
   if (ImGui::Button("Remove")) keep = false;
   if (gs) {
     ImGui::SameLine();
-    ImGui::Checkbox("overlay", &gs->stats_overlay);
+    ImGui::Checkbox("Stats Overlay", &gs->stats_overlay);
     ItemTip("Show this stream's live stats on its preview tile");
   }
 

@@ -220,11 +220,11 @@ bool DevicePanel::DrawSlot(Slot& slot, int index) {
       // the button row (stats themselves live on the preview tile).
       if (session) {
         ImGui::SameLine();
-        ImGui::Checkbox("overlay", &session->stats_overlay);
+        ImGui::Checkbox("Stats Overlay", &session->stats_overlay);
         ItemTip("Show this camera's live stats on its preview tile");
       }
       if (running)
-        StatusRight(kTextLive, "LIVE", NodeName(dev->device).c_str());
+        StatusRight(kTextLive, "LIVE");
       else if (slot.error.empty())
         StatusRight(kTextIdle, "IDLE");
 

@@ -4,6 +4,7 @@
  */
 #include "xmcam/ui/preview_panel.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <vector>
@@ -83,14 +84,13 @@ void PreviewPanel::DrawTile(AppController::Session& s, Tile& tile,
     app_->Select(selected ? std::string() : s.key);
   ImGui::PopID();
 
-  const float header_h = ImGui::GetTextLineHeight() + 4.0f;
-  const ImVec2 vid_min{cell_min.x + 2, cell_min.y + header_h};
+  const ImVec2 vid_min{cell_min.x + 2, cell_min.y + 2};
   const ImVec2 vid_max{cell_max.x - 2, cell_max.y - 2};
 
-  ImVec2 img_min{0, 0};
+  ImVec2 img_min{cell_min.x + 8, cell_min.y + 8};
   bool have_img = false;
   if (tile.have_frame && tile.display_tex != 0 && tile.w > 0) {
-    // Aspect-fit the frame into the video region.
+    // Aspect-fit the frame into the cell.
     const float avail_w = vid_max.x - vid_min.x;
     const float avail_h = vid_max.y - vid_min.y;
     const float ar = static_cast<float>(tile.w) / tile.h;
@@ -107,56 +107,111 @@ void PreviewPanel::DrawTile(AppController::Session& s, Tile& tile,
     img_min = ImVec2(x0, y0);
     have_img = true;
   } else {
-    dl->AddText(ImVec2(cell_min.x + 8, cell_min.y + header_h + 8),
+    dl->AddText(ImVec2(cell_min.x + 8, cell_min.y + 8),
                 ImGui::GetColorU32(kTextIdle), "waiting for frames...");
   }
 
-  // Header: label left, resolution+fps right.
-  char right[64];
-  snprintf(right, sizeof right, "%dx%d  %.1f fps", tile.w, tile.h,
-           s.display_stats.display_fps);
-  dl->AddText(ImVec2(cell_min.x + 6, cell_min.y + 2),
-              ImGui::GetColorU32(kTextLive), s.label.c_str());
-  const ImVec2 rsz = ImGui::CalcTextSize(right);
-  dl->AddText(ImVec2(cell_max.x - rsz.x - 6, cell_min.y + 2),
-              ImGui::GetColorU32(kTextLive), right);
-
-  // Live stats overlay: a translucent card ON the video itself (top-left of
-  // the displayed image), like an OSD — it never consumes layout space.
-  if (s.stats_overlay && s.source && have_img) {
-    const SourceStats st = s.source->GetStats();
-    const AppController::DisplayStats& d = s.display_stats;
-    const uint64_t dropped =
-        st.frames > d.frames_shown ? st.frames - d.frames_shown : 0;
-    char l1[96], l2[96], l3[96];
-    snprintf(l1, sizeof l1, "cap %.1f  disp %.1f fps", st.capture_fps,
-             d.display_fps);
-    snprintf(l2, sizeof l2, "drop %llu  dec %.1fms  up %.2fms",
-             static_cast<unsigned long long>(dropped), st.decode_ms,
-             d.upload_ms);
-    if (d.latency_ms > 0)
-      snprintf(l3, sizeof l3, "lat %.0fms  %s", d.latency_ms,
-               st.decoder.c_str());
-    else
-      snprintf(l3, sizeof l3, "%s", st.decoder.c_str());
-
+  // One consolidated OSD card at the image top-left: title, mode line and a
+  // structured label/value table (nothing floats in the letterbox band).
+  if (have_img) {
     const float lh = ImGui::GetTextLineHeight();
-    const int extra = (st.device_lost || st.generation > 0) ? 1 : 0;
-    const ImVec2 p0{img_min.x + 6, img_min.y + 6};
-    const ImVec2 p1{p0.x + 210.0f, p0.y + lh * (3 + extra) + 8};
-    dl->AddRectFilled(p0, p1, IM_COL32(0, 0, 0, 150), 4.0f);
-    const ImU32 col = IM_COL32(220, 220, 220, 255);
-    dl->AddText(ImVec2(p0.x + 5, p0.y + 3), col, l1);
-    dl->AddText(ImVec2(p0.x + 5, p0.y + 3 + lh), col, l2);
-    dl->AddText(ImVec2(p0.x + 5, p0.y + 3 + 2 * lh), col, l3);
-    if (st.device_lost)
-      dl->AddText(ImVec2(p0.x + 5, p0.y + 3 + 3 * lh),
-                  ImGui::GetColorU32(kTextError), "DEVICE LOST - recovering");
-    else if (st.generation > 0) {
-      char l4[48];
-      snprintf(l4, sizeof l4, "recovered %u time(s)", st.generation);
-      dl->AddText(ImVec2(p0.x + 5, p0.y + 3 + 3 * lh),
-                  ImGui::GetColorU32(kTextPending), l4);
+    const float pad = 7.0f;
+    const ImVec2 origin{img_min.x + 8, img_min.y + 8};
+    const ImU32 col_txt = IM_COL32(225, 225, 225, 255);
+    const ImU32 col_dim = IM_COL32(160, 160, 160, 255);
+    const ImU32 col_title = ImGui::GetColorU32(kTextLive);
+
+    char sub[96];
+    snprintf(sub, sizeof sub, "%dx%d", tile.w, tile.h);
+
+    if (!s.stats_overlay) {
+      // Minimal card: identity only.
+      char line[160];
+      snprintf(line, sizeof line, "%s  %s  %.1f fps", s.label.c_str(), sub,
+               s.display_stats.display_fps);
+      const ImVec2 ts = ImGui::CalcTextSize(line);
+      dl->AddRectFilled(origin,
+                        ImVec2(origin.x + ts.x + 2 * pad,
+                               origin.y + lh + 2 * pad - 2),
+                        IM_COL32(0, 0, 0, 190), 4.0f);
+      dl->AddText(ImVec2(origin.x + pad, origin.y + pad - 1), col_title,
+                  line);
+    } else if (s.source) {
+      const SourceStats st = s.source->GetStats();
+      const AppController::DisplayStats& d = s.display_stats;
+      const uint64_t dropped =
+          st.frames > d.frames_shown ? st.frames - d.frames_shown : 0;
+
+      char mode[96];
+      snprintf(mode, sizeof mode, "%s   %s", sub,
+               st.decoder.empty() ? "-" : st.decoder.c_str());
+
+      struct Row {
+        const char* k;
+        char v[32];
+      };
+      Row rows[6];
+      int n = 0;
+      snprintf(rows[n].v, sizeof rows[n].v, "%.1f fps", st.capture_fps);
+      rows[n++].k = "capture";
+      snprintf(rows[n].v, sizeof rows[n].v, "%.1f fps", d.display_fps);
+      rows[n++].k = "display";
+      snprintf(rows[n].v, sizeof rows[n].v, "%llu",
+               static_cast<unsigned long long>(dropped));
+      rows[n++].k = "dropped";
+      snprintf(rows[n].v, sizeof rows[n].v, "%.1f ms", st.decode_ms);
+      rows[n++].k = "decode";
+      snprintf(rows[n].v, sizeof rows[n].v, "%.2f ms", d.upload_ms);
+      rows[n++].k = "upload";
+      if (d.latency_ms > 0) {
+        snprintf(rows[n].v, sizeof rows[n].v, "%.0f ms", d.latency_ms);
+        rows[n++].k = "latency";
+      }
+
+      // Column geometry: labels left, values right-aligned in their column.
+      float key_w = 0, val_w = 0;
+      for (int i = 0; i < n; ++i) {
+        key_w = std::max(key_w, ImGui::CalcTextSize(rows[i].k).x);
+        val_w = std::max(val_w, ImGui::CalcTextSize(rows[i].v).x);
+      }
+      const float gap = 14.0f;
+      float card_w = std::max(
+          {ImGui::CalcTextSize(s.label.c_str()).x,
+           ImGui::CalcTextSize(mode).x, key_w + gap + val_w});
+      const char* extra = nullptr;
+      if (st.device_lost)
+        extra = "DEVICE LOST - recovering";
+      else if (st.generation > 0)
+        extra = "recovered after replug";
+      if (extra)
+        card_w = std::max(card_w, ImGui::CalcTextSize(extra).x);
+
+      const int total_lines = 2 + n + (extra ? 1 : 0);
+      const float line_gap = 3.0f;
+      dl->AddRectFilled(
+          origin,
+          ImVec2(origin.x + card_w + 2 * pad,
+                 origin.y + total_lines * (lh + line_gap) + 2 * pad),
+          IM_COL32(0, 0, 0, 190), 5.0f);
+
+      float y = origin.y + pad;
+      dl->AddText(ImVec2(origin.x + pad, y), col_title, s.label.c_str());
+      y += lh + line_gap;
+      dl->AddText(ImVec2(origin.x + pad, y), col_dim, mode);
+      y += lh + line_gap + 2.0f;
+      for (int i = 0; i < n; ++i) {
+        dl->AddText(ImVec2(origin.x + pad, y), col_dim, rows[i].k);
+        const float vw = ImGui::CalcTextSize(rows[i].v).x;
+        dl->AddText(
+            ImVec2(origin.x + pad + key_w + gap + (val_w - vw), y),
+            col_txt, rows[i].v);
+        y += lh + line_gap;
+      }
+      if (extra)
+        dl->AddText(ImVec2(origin.x + pad, y),
+                    ImGui::GetColorU32(st.device_lost ? kTextError
+                                                      : kTextPending),
+                    extra);
     }
   }
 

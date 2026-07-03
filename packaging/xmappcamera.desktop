@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=xmAppCamera
+Comment=Camera preview, tuning, qualification and recording
+Exec=xmAppCamera
+Terminal=false
+Categories=AudioVideo;Video;Utility;

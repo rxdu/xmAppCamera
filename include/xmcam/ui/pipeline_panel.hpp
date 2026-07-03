@@ -1,7 +1,11 @@
 /*
  * @file pipeline_panel.hpp
- * @brief Network-stream composer: presets + editable raw GStreamer pipeline,
- *        Validate (parse-only) and Play/Stop.
+ * @brief Network-stream slot manager (mirrors the camera slots): starts with
+ *        one stream block; "+ Add Stream" appends more; each slot has Simple
+ *        (URL + latency, codec-agnostic decodebin3 pipeline) and Advanced
+ *        (raw pipeline) modes, stateful Play/Apply/Stop + Remove, and live
+ *        connection state (CONNECTING/LIVE/ERROR/EOS) from the pipeline bus
+ *        with optional auto-reconnect.
  *
  * Copyright (c) 2026 Ruixiang Du (rdu)
  */
@@ -9,6 +13,7 @@
 #define XMCAM_UI_PIPELINE_PANEL_HPP
 
 #include <string>
+#include <vector>
 
 #include "viewer/panel.hpp"
 
@@ -22,12 +27,26 @@ class PipelinePanel : public quickviz::Panel {
   void Draw() override;
 
  private:
+  struct Slot {
+    std::string key;  // session key ("net<N>")
+    bool advanced = false;
+    char url[512] = "";
+    int latency_ms = 50;
+    bool auto_reconnect = true;
+    char buffer[2048] = "";  // advanced raw pipeline
+    std::string validate_msg;
+    bool validate_ok = false;
+  };
+
+  void AddSlot();
+  // Returns false if the slot's Remove button was pressed.
+  bool DrawSlot(Slot& slot, int index);
+  static std::string BuildSimplePipeline(const Slot& slot);
+  void Play(Slot& slot, const std::string& pipeline);
+
   AppController* app_;
-  char buffer_[2048];
-  std::string validate_msg_;
-  bool validate_ok_ = false;
-  std::string rtsp_msg_;  // last RTSP-export failure, shown in the panel
-  int export_port_ = 8554;
+  std::vector<Slot> slots_;
+  int next_key_ = 1;
 };
 
 }  // namespace xmotion

@@ -30,6 +30,19 @@ ctest --test-dir build --output-on-failure   # unit tests (camera/network ones s
 ./build/bin/xmAppCamera                        # the GUI
 ```
 
+### Install as a package
+
+```bash
+cd build && cpack -G DEB
+cp xmappcamera_*.deb /tmp/ && sudo apt install /tmp/xmappcamera_*.deb
+```
+
+`apt install` (not `dpkg -i`) resolves the runtime dependencies, including the
+GStreamer plugin packages. Installing via `/tmp` avoids apt's harmless
+"Download is performed unsandboxed" notice (the `_apt` sandbox user cannot
+read files inside home directories). CI also uploads a ready-made `.deb`
+artifact on every run.
+
 Headless smoke tools (no GUI): `build/bin/xmcam_v4l2_smoke [dev] [yuyv|mjpeg] [WxH] [fps] [n]`,
 `build/bin/xmcam_gst_smoke "<pipeline>" [n]`. Local RTP/UDP test stream: `scripts/test/udp_h264_stream.sh start`.
 

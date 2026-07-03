@@ -25,9 +25,12 @@ struct VideoFrame {
   int height = 0;
   PixelFormat format = PixelFormat::kUnknown;
 
-  // Plane 0 (packed formats use only this).
+  // Plane 0 (packed formats use only this). For compressed frames (kMjpeg/
+  // kH264 flowing to passthrough recorders), `data` is the bitstream and
+  // `data_size` its byte length; stride/planes are meaningless.
   const uint8_t* data = nullptr;
-  int stride = 0;  // bytes per row of plane 0
+  int stride = 0;       // bytes per row of plane 0 (raw formats)
+  size_t data_size = 0;  // payload bytes (compressed formats)
 
   // Planes 1/2 (e.g. U/V for I420, interleaved UV for NV12 uses only plane1);
   // nullptr for packed formats.

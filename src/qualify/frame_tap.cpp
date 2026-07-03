@@ -70,7 +70,9 @@ void FrameTap::Reset() {
 }
 
 void FrameTap::OnFrame(const VideoFrame& f) {
-  if (!f.valid()) return;
+  // Compressed frames (the passthrough tee) carry a bitstream, not pixels —
+  // they would pollute the means/intervals and double-count frames.
+  if (!f.valid() || IsCompressed(f.format)) return;
 
   // Compute the (subsampled) per-frame means and checksum outside the lock.
   uint64_t checksum = kFnvOffsetBasis;

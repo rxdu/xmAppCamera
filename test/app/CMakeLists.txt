@@ -1,0 +1,3 @@
+add_executable(test_sessions test_sessions.cpp)
+target_link_libraries(test_sessions PRIVATE xmcam_app_lib gtest gtest_main)
+gtest_discover_tests(test_sessions)

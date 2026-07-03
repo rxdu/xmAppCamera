@@ -15,7 +15,8 @@ MainDockingPanel::MainDockingPanel(AppController* app)
       preview_(app),
       control_(app),
       pipeline_(app),
-      qualify_(app) {
+      qualify_(app),
+      export_(app) {
   this->SetAutoLayout(false);
   this->SetNoResize(true);
   this->SetNoMove(true);
@@ -31,10 +32,19 @@ void MainDockingPanel::Draw() {
   ImGui::SetNextWindowPos(vp->WorkPos);
   ImGui::SetNextWindowSize(vp->WorkSize);
 
+  // The invisible dock host stays flush: the global WindowPadding is meant
+  // for the visible panels, not the dockspace container.
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
   Begin();
+  ImGui::PopStyleVar();
   {
     dockspace_id_ = ImGui::GetID("xmCamDockSpace");
-    ImGui::DockSpace(dockspace_id_, ImVec2(0, 0), ImGuiDockNodeFlags_None);
+    // Fixed layout, flexible sizing: panels cannot be torn out or
+    // rearranged (NoUndocking/NoSplit), but the splitters between them stay
+    // draggable (NoResize deliberately NOT set).
+    ImGui::DockSpace(dockspace_id_, ImVec2(0, 0),
+                     ImGuiDockNodeFlags_NoUndocking |
+                         ImGuiDockNodeFlags_NoSplit);
 
     if (!layout_initialized_) {
       layout_initialized_ = true;
@@ -55,7 +65,8 @@ void MainDockingPanel::Draw() {
       ImGui::DockBuilderDockWindow("Device", left_top);
       ImGui::DockBuilderDockWindow("Network Stream", left_top);
       ImGui::DockBuilderDockWindow("Controls", left_bottom);
-      ImGui::DockBuilderDockWindow("Qualify", left_bottom);
+      ImGui::DockBuilderDockWindow("Checks", left_bottom);
+      ImGui::DockBuilderDockWindow("Export", left_bottom);
       ImGui::DockBuilderDockWindow("Preview", center);
       ImGui::DockBuilderFinish(dockspace_id_);
     }
@@ -67,6 +78,7 @@ void MainDockingPanel::Draw() {
   pipeline_.Draw();
   control_.Draw();
   qualify_.Draw();
+  export_.Draw();
   preview_.Draw();
 }
 

@@ -15,6 +15,7 @@
 #include "xmcam/app/app_controller.hpp"
 #include "xmcam/ui/control_panel.hpp"
 #include "xmcam/ui/device_panel.hpp"
+#include "xmcam/ui/export_panel.hpp"
 #include "xmcam/ui/pipeline_panel.hpp"
 #include "xmcam/ui/preview_panel.hpp"
 #include "xmcam/ui/qualify_panel.hpp"
@@ -32,6 +33,7 @@ class MainDockingPanel : public quickviz::Panel {
   ControlPanel control_;
   PipelinePanel pipeline_;
   QualifyPanel qualify_;
+  ExportPanel export_;
 
   unsigned dockspace_id_ = 0;
   bool layout_initialized_ = false;

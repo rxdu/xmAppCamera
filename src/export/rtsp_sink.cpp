@@ -44,11 +44,13 @@ void MediaConfigureCb(GstRTSPMediaFactory* /*f*/, GstRTSPMedia* media,
 
 RtspSink::~RtspSink() { Stop(); }
 
-Status RtspSink::Start(int port, const std::string& mount, int bitrate_kbps) {
+Status RtspSink::Start(const std::string& address, int port,
+                       const std::string& mount, int bitrate_kbps) {
   if (running_.load()) return Ok();
   if (!gst_is_initialized()) gst_init(nullptr, nullptr);
   bitrate_kbps_ = bitrate_kbps;
-  url_ = "rtsp://127.0.0.1:" + std::to_string(port) + mount;
+  address_ = address.empty() ? "0.0.0.0" : address;
+  url_ = "rtsp://" + address_ + ":" + std::to_string(port) + mount;
   service_ = std::to_string(port);
   mount_ = mount;
   running_.store(true);
@@ -63,6 +65,7 @@ void RtspSink::Loop() {
   loop_ = g_main_loop_new(ctx, FALSE);
 
   server_ = gst_rtsp_server_new();
+  gst_rtsp_server_set_address(server_, address_.c_str());
   gst_rtsp_server_set_service(server_, service_.c_str());
 
   GstRTSPMountPoints* mounts = gst_rtsp_server_get_mount_points(server_);

@@ -9,9 +9,9 @@ add_subdirectory(control)
 add_subdirectory(export)
 add_subdirectory(qualify)
 
+add_subdirectory(app)  # xmcam_app_lib is GUI-free; the executable is gated inside
 if(XMCAM_BUILD_GUI)
   add_subdirectory(ui)
-  add_subdirectory(app)
 endif()
 # Added in later phases:
 #   add_subdirectory(control)    # ControlIntrospector, ControlSet

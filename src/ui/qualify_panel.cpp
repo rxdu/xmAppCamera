@@ -14,6 +14,7 @@
 #include "imgui.h"
 
 #include "xmcam/qualify/qual_checks.hpp"
+#include "xmcam/ui/widgets.hpp"
 #include "xmcam/qualify/qual_report.hpp"
 #include "xmsigma/logging/xlogger.hpp"
 
@@ -41,7 +42,7 @@ std::string NowIso() {
 }  // namespace
 
 QualifyPanel::QualifyPanel(AppController* app)
-    : quickviz::Panel("Qualify"), app_(app) {
+    : quickviz::Panel("Checks"), app_(app) {
   this->SetAutoLayout(false);
   // Headless-test hook: run the automated checks (and export the report) as
   // soon as a source is streaming, without operator clicks.
@@ -60,7 +61,9 @@ QualifyPanel::~QualifyPanel() {
 void QualifyPanel::JoinWorker() {
   if (worker_.joinable()) worker_.join();
   if (tap_attached_) {
-    app_->DetachFrameSink(&tap_);
+    if (AppController::Session* s = app_->FindSession(tap_session_key_))
+      app_->DetachFrameSink(*s, &tap_);
+    tap_session_key_.clear();
     tap_attached_ = false;
   }
 }
@@ -82,7 +85,11 @@ void QualifyPanel::StartAutomatedRun() {
   abort_.store(false);
 
   // The tap must be attached from the render thread before the worker starts.
-  tap_attached_ = app_->AttachFrameSink(&tap_);
+  tap_attached_ = false;
+  if (AppController::Session* s = app_->SelectedCamera()) {
+    tap_attached_ = app_->AttachFrameSink(*s, &tap_);
+    tap_session_key_ = s->key;
+  }
   {
     std::lock_guard<std::mutex> lk(mtx_);
     results_.clear();
@@ -216,7 +223,11 @@ void QualifyPanel::StartPowerCycleCheck(bool expect_stream_recovery) {
   if (worker_busy_.load()) return;
   JoinWorker();
   abort_.store(false);
-  tap_attached_ = app_->AttachFrameSink(&tap_);
+  tap_attached_ = false;
+  if (AppController::Session* s = app_->SelectedCamera()) {
+    tap_attached_ = app_->AttachFrameSink(*s, &tap_);
+    tap_session_key_ = s->key;
+  }
 
   const char* id = expect_stream_recovery ? "disconnect_recovery"
                                           : "power_cycle_identity";
@@ -309,14 +320,6 @@ void QualifyPanel::ExportReport() {
     rep.platform = platform_;
     rep.results = results_;
   }
-  rep.manual_fields = {
-      {"firmware_update_freeze_policy", fw_policy_},
-      {"bulk_hardware_revision_guarantee", bulk_rev_},
-      {"lens_part_number", lens_pn_},
-      {"ir_filter_spec", ir_filter_},
-      {"isp_control_documentation", isp_docs_},
-      {"notes", notes_},
-  };
   rep.finished_at = NowIso();
   rep.started_at = rep.finished_at;
 
@@ -353,22 +356,38 @@ void QualifyPanel::Draw() {
 
     if (!app_->IsRunning() || !app_->Controls()) {
       ImGui::TextWrapped(
-          "Start a USB camera (Device panel) to run qualification.");
+          "Start and select a USB camera (Device panel or preview tile) "
+          "to run qualification.");
       End();
       return;
     }
 
+    Caption("Production-readiness checks for a camera: verifies controls "
+            "really work, timing is stable, and streaming survives stress - "
+            "then exports a per-unit report.");
+    if (AppController::Session* sel = app_->SelectedCamera())
+      ImGui::TextDisabled("target: %s", sel->label.c_str());
+
     const bool busy = worker_busy_.load();
     if (busy) ImGui::BeginDisabled();
     if (ImGui::Button("Run automated checks")) StartAutomatedRun();
+    ItemTip("~3 min hands-off: platform/firmware identity, control lock &\n"
+            "effect verification, timestamp stability, USB link audit,\n"
+            "open/close stress and a sustained soak");
     ImGui::SameLine();
     ImGui::SetNextItemWidth(90);
     ImGui::InputInt("soak s", &soak_s_);
+    ItemTip("Duration of the sustained-throughput soak at the end of the\n"
+            "automated run (default 120s)");
     if (ImGui::Button("Power-cycle identity check"))
       StartPowerCycleCheck(false);
+    ItemTip("You unplug/replug the camera mid-check; verifies the image\n"
+            "comes back IDENTICAL (fixed scene required)");
     ImGui::SameLine();
     if (ImGui::Button("Disconnect recovery check"))
       StartPowerCycleCheck(true);
+    ItemTip("You unplug/replug the camera mid-check; measures how fast\n"
+            "streaming recovers automatically");
     if (busy) ImGui::EndDisabled();
     if (busy) {
       ImGui::SameLine();
@@ -388,16 +407,6 @@ void QualifyPanel::Draw() {
           ImGui::Unindent();
         }
       }
-    }
-
-    ImGui::Separator();
-    if (ImGui::CollapsingHeader("Vendor / procurement record")) {
-      ImGui::InputText("FW update/freeze policy", fw_policy_, sizeof fw_policy_);
-      ImGui::InputText("Bulk HW revision guarantee", bulk_rev_, sizeof bulk_rev_);
-      ImGui::InputText("Lens part number", lens_pn_, sizeof lens_pn_);
-      ImGui::InputText("IR-filter spec", ir_filter_, sizeof ir_filter_);
-      ImGui::InputText("ISP control docs", isp_docs_, sizeof isp_docs_);
-      ImGui::InputText("Notes", notes_, sizeof notes_);
     }
 
     if (ImGui::Button("Export report (YAML + Markdown)")) ExportReport();

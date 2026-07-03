@@ -1,8 +1,9 @@
 /*
  * @file app_controller.hpp
- * @brief Owns the active video source + its control set, and mediates between
- *        the UI panels and the pipeline/control backends. All methods are
- *        called from the render thread (inside panel Draw()).
+ * @brief Session manager: owns N concurrently-streaming sources (USB cameras
+ *        and network streams), each with its own controls, stats, and sink
+ *        slot, plus a global "selected" session that the Controls/Qualify
+ *        panels operate on. All methods are called from the render thread.
  *
  * Copyright (c) 2026 Ruixiang Du (rdu)
  */
@@ -14,9 +15,13 @@
 #include <vector>
 
 #include "xmcam/control/control_set.hpp"
+#include "xmcam/core/fanout_sink.hpp"
 #include "xmcam/pipeline/v4l2_device.hpp"
 #include "xmcam/pipeline/v4l2_source.hpp"
 #include "xmcam/pipeline/video_source.hpp"
+#ifdef XMCAM_WITH_GSTREAMER
+#include "xmcam/export/file_sink.hpp"
+#endif
 #ifdef XMCAM_WITH_RTSP_SERVER
 #include "xmcam/export/rtsp_sink.hpp"
 #endif
@@ -25,30 +30,8 @@ namespace xmotion {
 
 class AppController {
  public:
-  AppController() = default;
-  ~AppController();
+  enum class SourceKind { kV4l2, kGst };
 
-  // --- device discovery ---
-  const std::vector<DeviceInfo>& RefreshDevices();
-  const std::vector<DeviceInfo>& devices() const { return devices_; }
-
-  // --- source lifecycle (render thread) ---
-  Status StartV4l2(const std::string& device, PixelFormat fmt, int width,
-                   int height, double fps);
-  // Convenience for demos/headless tests: pick the first device, prefer MJPEG
-  // near 1280x720, and start it. Returns kNotFound if no device.
-  Status StartFirstDevice();
-  Status StartGst(const std::string& pipeline);
-  void StopSource();
-
-  bool HasSource() const { return source_ != nullptr; }
-  bool IsRunning() const { return source_ && source_->IsRunning(); }
-  const std::string& status() const { return status_; }
-  const std::string& active_device() const { return active_device_; }
-
-  // What is currently running, for stateful Start/Stop/Apply buttons: the UI
-  // diffs its selection against this to decide between Stop and Apply.
-  enum class ActiveKind { kNone, kV4l2, kGst };
   struct ActiveV4l2Config {
     std::string device;
     PixelFormat format = PixelFormat::kUnknown;
@@ -56,64 +39,155 @@ class AppController {
     int height = 0;
     double fps = 0.0;
   };
-  ActiveKind active_kind() const {
-    return IsRunning() ? active_kind_ : ActiveKind::kNone;
-  }
-  const ActiveV4l2Config& active_config() const { return active_config_; }
-  const std::string& active_pipeline() const { return active_pipeline_; }
 
-  // Render-side counters, written by the preview panel each frame.
+  // Render-side counters, written by the preview tile each frame.
   struct DisplayStats {
     double display_fps = 0.0;
     double upload_ms = 0.0;
-    double latency_ms = 0.0;  // glass-to-glass (USB/monotonic only)
+    double latency_ms = 0.0;
     uint64_t frames_shown = 0;
     int width = 0;
     int height = 0;
   };
 
+  // One concurrently-streaming source. `key` identifies it across the UI:
+  // the device path for cameras, "network" for the (single) gst session.
+  struct Session {
+    int id = 0;
+    SourceKind kind = SourceKind::kV4l2;
+    std::string key;
+    std::string label;  // human title for tiles/headers: "card (videoN)"
+    std::unique_ptr<VideoSource> source;
+    std::shared_ptr<V4l2Device> ctrl_dev;  // v4l2 only
+    std::unique_ptr<ControlSet> controls;  // v4l2 only
+    ActiveV4l2Config config;               // v4l2 only
+    std::string pipeline;                  // gst only
+    DisplayStats display_stats;
+    bool stats_overlay = true;  // draw live stats on this session's tile
+    int controls_epoch = 0;
+    uint32_t last_generation = 0;
+    // Frame tee: RTSP export, file recorder and the qualification tap all
+    // consume concurrently through the fanout.
+    FanoutSink fanout;
+#ifdef XMCAM_WITH_RTSP_SERVER
+    std::unique_ptr<RtspSink> rtsp;
+#endif
+#ifdef XMCAM_WITH_GSTREAMER
+    std::unique_ptr<FileSink> recorder;
+#endif
+
+    bool IsRunning() const { return source && source->IsRunning(); }
+  };
+
+  AppController() = default;
+  ~AppController();
+
+  // --- device discovery ---
+  const std::vector<DeviceInfo>& RefreshDevices();
+  const std::vector<DeviceInfo>& devices() const { return devices_; }
+
+  // --- session lifecycle (render thread) ---
+  // Create (or restart, if this device already has a session) and select it.
+  Status StartV4l2(const std::string& device, PixelFormat fmt, int width,
+                   int height, double fps);
+  // Network-stream sessions are keyed by the caller (e.g. "net1", "net2"),
+  // so several streams can run side by side like camera slots.
+  Status StartGst(const std::string& key, const std::string& pipeline);
+  void StopSession(const std::string& key);
+  void StopAll();
+  Status StartFirstDevice();  // demo/headless-test convenience
+
+  const std::vector<std::unique_ptr<Session>>& sessions() const {
+    return sessions_;
+  }
+  Session* FindSession(const std::string& key);
+  size_t RunningCount() const;
+
+  // --- selection (drives Controls / Qualify / RTSP-export targeting) ---
+  void Select(const std::string& key) { selected_key_ = key; }
+  const std::string& selected_key() const { return selected_key_; }
+  Session* selected() { return FindSession(selected_key_); }
+
+  // The camera the Controls/Qualify panels should target:
+  //  - the selected session when it is a camera;
+  //  - the first running camera when the selection merely sits elsewhere
+  //    (e.g. a network tile) — tuning works right after Start, no dropdown;
+  //  - NONE when the user explicitly deselected (empty key): a deliberate
+  //    "hands off" that guards against tuning the wrong camera.
+  Session* SelectedCamera() {
+    if (selected_key_.empty()) return nullptr;
+    Session* s = selected();
+    if (!s) return nullptr;  // stale key (session stopped): stay hands-off
+    if (s->controls) return s;
+    for (auto& c : sessions_)
+      if (c->controls && c->IsRunning()) return c.get();
+    return nullptr;
+  }
+
   // --- per-frame (render thread) ---
-  bool PullFrame(VideoFrame* out);
-  SourceStats Stats() const;
-  void SetDisplayStats(const DisplayStats& s) { display_stats_ = s; }
-  DisplayStats display_stats() const { return display_stats_; }
+  void MaintainRecovery();  // all sessions; call once per frame
+  bool PullFrame(Session& s, VideoFrame* out) {
+    return s.source && s.source->Frames().TryPull(*out);
+  }
 
-  // --- controls (non-null only for a running V4L2 source) ---
-  ControlSet* Controls() { return controls_.get(); }
-  // Bumped whenever the control set is rebuilt (start, hot-plug recovery);
-  // panels re-read cached values when it changes.
-  int controls_epoch() const { return controls_epoch_; }
+  // --- per-session tee (fanout: multiple sinks at once) ---
+  bool AttachFrameSink(Session& s, FrameSink* sink);
+  void DetachFrameSink(Session& s, FrameSink* sink);
+  Status StartRtspExport(Session& s, const std::string& address, int port,
+                         const std::string& mount);
+  void StopRtspExport(Session& s);
+#ifdef XMCAM_WITH_GSTREAMER
+  Status StartRecording(Session& s, const std::string& path,
+                        FileSink::Format format, int64_t epoch_ns = 0);
+  void StopRecording(Session& s);
 
-  // Attach/detach a frame tee on the active source (qualification tap, RTSP).
-  // Only one sink at a time; returns false if none active or slot taken.
-  bool AttachFrameSink(FrameSink* sink);
-  void DetachFrameSink(FrameSink* sink);
+  // Synchronized recording: start every running session's recorder against a
+  // SHARED capture-clock epoch, grouped under <dir>/<stamp>/ with a
+  // manifest.yaml for downstream alignment. Stop halts all of them.
+  Status StartRecordingGroup(const std::string& dir, FileSink::Format format);
+  void StopRecordingGroup();
+  bool GroupRecording() const { return group_recording_; }
+  const std::string& group_dir() const { return group_dir_; }
+#endif
 
-  // --- RTSP re-export (Phase 5; no-op if built without gst-rtsp-server) ---
-  Status StartRtspExport(int port, const std::string& mount);
-  void StopRtspExport();
-  bool RtspExporting() const;
-  std::string RtspUrl() const;
+  // --- target-camera conveniences (Controls / Qualify panels) ---
+  bool IsRunning() {
+    Session* s = SelectedCamera();
+    return s && s->IsRunning();
+  }
+  ControlSet* Controls() {
+    Session* s = SelectedCamera();
+    return s ? s->controls.get() : nullptr;
+  }
+  int controls_epoch() {
+    Session* s = SelectedCamera();
+    return s ? s->controls_epoch : -1;
+  }
+  const std::string& active_device() {
+    static const std::string kEmpty;
+    Session* s = SelectedCamera();
+    return s ? s->key : kEmpty;
+  }
+  SourceStats Stats() {
+    Session* s = SelectedCamera();
+    return (s && s->source) ? s->source->GetStats() : SourceStats{};
+  }
+  DisplayStats display_stats() {
+    Session* s = SelectedCamera();
+    return s ? s->display_stats : DisplayStats{};
+  }
 
  private:
-  std::vector<DeviceInfo> devices_;
-  std::unique_ptr<VideoSource> source_;
-  std::shared_ptr<V4l2Device> ctrl_dev_;
-  std::unique_ptr<ControlSet> controls_;
-  void MaintainRecovery();  // rebuild controls after a hot-plug recovery
+  Session* EnsureSession(SourceKind kind, const std::string& key);
+  void TeardownSession(Session& s);
+  void RebuildControls(Session& s);
 
-  std::string status_ = "idle";
-  std::string active_device_;
-  ActiveKind active_kind_ = ActiveKind::kNone;
-  ActiveV4l2Config active_config_;
-  std::string active_pipeline_;
-  DisplayStats display_stats_;
-  int controls_epoch_ = 0;
-  uint32_t last_generation_ = 0;
-  FrameSink* attached_sink_ = nullptr;  // render-thread only
-#ifdef XMCAM_WITH_RTSP_SERVER
-  std::unique_ptr<RtspSink> rtsp_;
-#endif
+  std::vector<DeviceInfo> devices_;
+  std::vector<std::unique_ptr<Session>> sessions_;
+  bool group_recording_ = false;
+  std::string group_dir_;
+  std::string selected_key_;
+  int next_id_ = 1;
 };
 
 }  // namespace xmotion

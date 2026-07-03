@@ -44,6 +44,7 @@ class QualifyPanel : public quickviz::Panel {
 
   AppController* app_;
   FrameTap tap_;
+  std::string tap_session_key_;  // session the tap is attached to
   bool tap_attached_ = false;
   bool auto_run_pending_ = false;  // XMCAM_AUTOQUALIFY headless-test hook
   bool auto_export_ = false;
@@ -57,14 +58,6 @@ class QualifyPanel : public quickviz::Panel {
   std::vector<QualCheckResult> results_;
   PlatformInfo platform_;
   std::string report_msg_;
-
-  // Vendor / procurement answers (manual fields).
-  char fw_policy_[256] = "";
-  char bulk_rev_[256] = "";
-  char lens_pn_[256] = "";
-  char ir_filter_[256] = "";
-  char isp_docs_[256] = "";
-  char notes_[512] = "";
 };
 
 }  // namespace xmotion

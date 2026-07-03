@@ -4,8 +4,11 @@
  */
 #include "xmcam/ui/control_panel.hpp"
 
+#include <algorithm>
+
 #include "imgui.h"
 
+#include "xmcam/ui/widgets.hpp"
 #include "xmsigma/logging/xlogger.hpp"
 
 namespace xmotion {
@@ -29,9 +32,39 @@ void ControlPanel::ReloadValues(ControlSet* cs) {
 void ControlPanel::Draw() {
   Begin();
   {
+    // Target: the selected camera, falling back to the first running one —
+    // tuning works right after Start with no dropdown step. The combo only
+    // appears when there is more than one camera to choose between.
+    AppController::Session* target = app_->SelectedCamera();
+    int n_cams = 0;
+    for (auto& s : app_->sessions())
+      if (s->controls) ++n_cams;
+    // The combo shows when there is a choice to make OR when the user has
+    // deselected (target null) and needs a way back in.
+    if (n_cams > 1 || (n_cams >= 1 && !target)) {
+      FieldLabel("Camera");
+      if (ImGui::BeginCombo("##camera",
+                            target ? target->label.c_str() : "-")) {
+        for (auto& s : app_->sessions()) {
+          if (!s->controls) continue;
+          ImGui::PushID(s->id);
+          if (ImGui::Selectable(s->label.c_str(), target == s.get()))
+            app_->Select(s->key);
+          ImGui::PopID();
+        }
+        ImGui::EndCombo();
+      }
+    } else if (target) {
+      ImGui::TextDisabled("%s", target->label.c_str());
+    }
+
     ControlSet* cs = app_->Controls();
     if (!cs) {
-      ImGui::TextDisabled("start a USB camera to tune controls");
+      if (n_cams >= 1)
+        ImGui::TextDisabled(
+            "no camera selected - pick one above, or click a preview tile");
+      else
+        ImGui::TextDisabled("start a USB camera to tune controls");
       End();
       return;
     }
@@ -52,6 +85,20 @@ void ControlPanel::Draw() {
     }
     ImGui::Separator();
 
+    // Left-side labels for the control widgets too. Names vary widely
+    // ("Hue" vs "White Balance Temperature"), so size the label column to
+    // the longest visible name, capped at ~half the panel width.
+    float label_col = 0.0f;
+    for (const auto& c : cs->controls())
+      if (!c.IsDisabled())
+        label_col =
+            std::max(label_col, ImGui::CalcTextSize(c.name.c_str()).x);
+    // SameLine(x) is window-absolute: offset by the content start (window
+    // padding) so the label room is what we actually measured.
+    label_col = ImGui::GetCursorPosX() +
+                std::min(label_col + 12.0f,
+                         ImGui::GetContentRegionAvail().x * 0.55f);
+
     bool changed = false;
     for (const auto& c : cs->controls()) {
       if (c.IsDisabled()) continue;
@@ -61,11 +108,25 @@ void ControlPanel::Draw() {
       const bool locked = c.IsInactive() || c.IsReadOnly();
       if (locked) ImGui::BeginDisabled();
 
+      FieldLabel(c.name.c_str(), label_col);
+      // Hovering the label explains the range and why a control is locked.
+      char tip[160];
+      if (locked)
+        snprintf(tip, sizeof tip,
+                 "%s\nLocked: an automatic mode owns this control -\n"
+                 "switch the related Auto setting to manual to unlock",
+                 c.name.c_str());
+      else
+        snprintf(tip, sizeof tip, "%s\nrange %lld..%lld, default %lld",
+                 c.name.c_str(), static_cast<long long>(c.minimum),
+                 static_cast<long long>(c.maximum),
+                 static_cast<long long>(c.default_value));
+      ItemTip(tip);
       int64_t& val = values_[c.id];
       switch (c.type) {
         case ControlType::kBoolean: {
           bool b = val != 0;
-          if (ImGui::Checkbox(c.name.c_str(), &b)) {
+          if (ImGui::Checkbox("##v", &b)) {
             val = b ? 1 : 0;
             changed |= cs->Set(c.id, val).ok();
           }
@@ -77,7 +138,7 @@ void ControlPanel::Draw() {
           const char* cur = "?";
           for (const auto& m : c.menu)
             if (m.value == val) cur = m.label.c_str();
-          if (ImGui::BeginCombo(c.name.c_str(), cur)) {
+          if (ImGui::BeginCombo("##v", cur)) {
             int mi = 0;
             for (const auto& m : c.menu) {
               ImGui::PushID(mi++);
@@ -92,7 +153,7 @@ void ControlPanel::Draw() {
           break;
         }
         case ControlType::kButton: {
-          if (ImGui::Button(c.name.c_str())) {
+          if (ImGui::Button("Trigger##v")) {
             if (Status st = cs->Set(c.id, 1); !st.ok())
               XLOG_WARN("control '{}' trigger failed: {}", c.name,
                         st.message());
@@ -101,8 +162,7 @@ void ControlPanel::Draw() {
         }
         default: {  // integer-like
           int iv = static_cast<int>(val);
-          if (ImGui::SliderInt(c.name.c_str(), &iv,
-                               static_cast<int>(c.minimum),
+          if (ImGui::SliderInt("##v", &iv, static_cast<int>(c.minimum),
                                static_cast<int>(c.maximum))) {
             val = iv;
             changed |= cs->Set(c.id, val).ok();

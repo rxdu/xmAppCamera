@@ -6,7 +6,7 @@ A lightweight, low-latency desktop GUI to **preview and fine-tune camera sources
 - **RTSP / UDP streams** — compose GStreamer pipelines (guided builder + raw override) to decode network video.
 - **RTSP re-export** *(nice-to-have)* — publish any active source as an RTSP stream.
 
-Built on **quickviz** (windowing, ImGui docking, GL texture streaming) and **xmSigma** (logging). Frames stay native (no OpenCV / `cv::Mat`) for raw performance and a small footprint.
+Built on **quickviz** (windowing, ImGui docking, GL texture streaming) and **xmBase** (logging). Frames stay native (no OpenCV / `cv::Mat`) for raw performance and a small footprint.
 
 ## Status
 Backend implemented and hardware-verified; GUI implemented and CI-green (build + tests). Ready for manual testing.
@@ -54,4 +54,4 @@ Headless smoke tools (no GUI): `build/bin/xmcam_v4l2_smoke [dev] [yuyv|mjpeg] [W
 - **[TODO.md](TODO.md)** — phased work breakdown.
 
 ## Dependencies (planned)
-quickviz · xmSigma · GStreamer 1.x (`gstreamer-1.0 app video`, + `rtsp-server` in phase 2) · libv4l2 / linux uapi · yaml-cpp. **No OpenCV.** C++17.
+quickviz · xmBase · GStreamer 1.x (`gstreamer-1.0 app video`, + `rtsp-server` in phase 2) · libv4l2 / linux uapi · yaml-cpp. **No OpenCV.** C++17.

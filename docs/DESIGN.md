@@ -2,7 +2,7 @@
 
 **Status:** Draft (pre-implementation) · **Owner:** rdu · **Last updated:** 2026-07-01
 
-A lightweight, low-latency desktop GUI for previewing and fine-tuning camera sources — USB/V4L2 cameras and RTSP/UDP network streams — built on the xmotion family (quickviz + xmSigma).
+A lightweight, low-latency desktop GUI for previewing and fine-tuning camera sources — USB/V4L2 cameras and RTSP/UDP network streams — built on the xmotion family (quickviz + xmBase).
 
 ---
 
@@ -26,7 +26,7 @@ A lightweight, low-latency desktop GUI for previewing and fine-tuning camera sou
 | Dependency | Provides | Target / include |
 |---|---|---|
 | **quickviz** (xmGamma) | `Viewer` + ImGui docking, `Panel` base, `Texture` renderable (raw buffer → GL via PBO), `DataStream<T>`, `RingBuffer<T>` | `quickviz` (INTERFACE) / `quickviz::scene`, `quickviz::viewer` |
-| **xmSigma** | `XLOG_*` logging, common types | `xmotion::xmSigma` / `xmsigma/logging/xlogger.hpp` |
+| **xmBase** | `XLOG_*` logging, common types | `xmotion::xmBase` / `xmbase/logging/xlogger.hpp` |
 | **GStreamer 1.x** | decode/network/encode elements, `appsink`/`appsrc`, `gst_parse_launch` | pkg-config `gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0` (+ `gstreamer-rtsp-server-1.0` in phase 2) |
 | **libv4l2 / linux uapi** | device + control + format ioctls | `<linux/videodev2.h>`, optional `libv4l2` |
 | **yaml-cpp** | config read/write | `find_package(yaml-cpp)` — family standard (xmNabla, swervebot) |
@@ -35,7 +35,7 @@ A lightweight, low-latency desktop GUI for previewing and fine-tuning camera sou
 
 Conventions inherited from the family: C++17, `namespace xmotion`, Google `clang-format` (`SortIncludes: Never`), GoogleTest via submodule, `include/<proj>/ · src/ · test/` layout, `xmotion::` CMake namespace, dependencies point downward only.
 
-**Dependency wiring (ADR D8):** quickviz (pinned `68b79c4`), xmSigma (`d65e418`), and googletest (`973323e`) are git submodules under `third_party/`, consumed via `add_subdirectory` with a `find_package` fallback. GStreamer 1.20.x and yaml-cpp 0.7 are system packages (installed). `gstreamer-rtsp-server-1.0` is not yet installed — needed only for RTSP export (Phase 5).
+**Dependency wiring (ADR D8):** quickviz (pinned `68b79c4`), xmBase (`30d7606`, renamed from xmSigma), and googletest (`973323e`) are git submodules under `third_party/`, consumed via `add_subdirectory` with a `find_package` fallback. GStreamer 1.20.x and yaml-cpp 0.7 are system packages (installed). `gstreamer-rtsp-server-1.0` is not yet installed — needed only for RTSP export (Phase 5).
 
 ---
 
@@ -59,7 +59,7 @@ Conventions inherited from the family: C++17, `namespace xmotion`, Google `clang
 │ core/         VideoFrame · PixelFormat · SourceDescriptor · SourceCaps · │  ← value types, no deps
 │               SourceStats · Result/Error · config schema types           │
 └────────────────────────────────────────────────────────────────────────┘
-        vendored: quickviz · xmSigma · GStreamer · libv4l2 · yaml-cpp
+        vendored: quickviz · xmBase · GStreamer · libv4l2 · yaml-cpp
 ```
 
 Dependencies point downward only. `core/` has no dependency on quickviz/GStreamer/V4L2 and is unit-testable in isolation. `pipeline/`, `control/`, `export/` are pure logic testable without a window. `ui/` and `app/` are the only layers that touch quickviz.
@@ -213,7 +213,7 @@ class FrameUploader {
 
 ```
 xmAppCamera/
-├── CMakeLists.txt              # C++17, finds quickviz/xmSigma/GStreamer/yaml-cpp; no OpenCV
+├── CMakeLists.txt              # C++17, finds quickviz/xmBase/GStreamer/yaml-cpp; no OpenCV
 ├── README.md · TODO.md
 ├── docs/{DESIGN.md, adr/, design/config-schema.md}
 ├── include/xmcam/

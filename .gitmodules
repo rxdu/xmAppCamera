@@ -1,6 +1,6 @@
-[submodule "third_party/xmSigma"]
-	path = third_party/xmSigma
-	url = https://github.com/rxdu/xmSigma.git
+[submodule "third_party/xmBase"]
+	path = third_party/xmBase
+	url = https://github.com/rxdu/xmBase.git
 	branch = main
 [submodule "third_party/quickviz"]
 	path = third_party/quickviz

@@ -20,7 +20,7 @@ else()
 endif()
 
 # xmcam_control transitively brings the pipeline (V4l2Device), core Status
-# types and xmSigma logging.
+# types and xmBase logging.
 target_link_libraries(xmcam_qualify PUBLIC xmcam_control
   ${XMCAM_YAML_CPP_TARGET})
 

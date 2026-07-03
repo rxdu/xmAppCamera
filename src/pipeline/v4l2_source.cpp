@@ -18,7 +18,7 @@
 #include <cstring>
 
 #include "xmcam/core/util/scope_timer.hpp"
-#include "xmsigma/logging/xlogger.hpp"
+#include "xmbase/logging/xlogger.hpp"
 
 #ifdef XMCAM_WITH_GSTREAMER
 #include "xmcam/pipeline/gst_compressed_decoder.hpp"

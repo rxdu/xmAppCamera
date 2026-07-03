@@ -6,7 +6,7 @@
 
 #include "glad/glad.h"
 
-#include "xmsigma/logging/xlogger.hpp"
+#include "xmbase/logging/xlogger.hpp"
 
 namespace xmotion {
 namespace {

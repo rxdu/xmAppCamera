@@ -10,7 +10,7 @@
 #include <fstream>
 
 #include "xmcam/core/pixel_format.hpp"
-#include "xmsigma/logging/xlogger.hpp"
+#include "xmbase/logging/xlogger.hpp"
 
 namespace xmotion {
 namespace {

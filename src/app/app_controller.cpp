@@ -11,7 +11,7 @@
 #include <ctime>
 #include <filesystem>
 
-#include "xmsigma/logging/xlogger.hpp"
+#include "xmbase/logging/xlogger.hpp"
 
 #ifdef XMCAM_WITH_GSTREAMER
 #include "xmcam/pipeline/gst_source.hpp"

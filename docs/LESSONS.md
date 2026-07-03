@@ -2,10 +2,10 @@
 
 Project-visible record of mistakes and their corrections. Consult during intake and after errors.
 
-### Must stay C++17 (xmSigma logging breaks under C++20)
-- **Pattern:** Bumping the project to C++20 (to satisfy quickviz's Yoga auto-layout) broke the build: `xmSigma/.../logger_vendor_spdlog.hpp: 'args#0' is not a constant expression`. spdlog 1.9 / fmt 8 enforce compile-time format-string checking under C++20, which xmSigma's runtime-format wrapper violates.
-- **Correction:** Keep the whole project on C++17. Do not raise `CMAKE_CXX_STANDARD` while depending on `xmotion::xmSigma`.
-- **Context:** CMake, xmSigma + spdlog/fmt, C++ standard selection.
+### Must stay C++17 (xmBase logging breaks under C++20)
+- **Pattern:** Bumping the project to C++20 (to satisfy quickviz's Yoga auto-layout) broke the build: `xmBase/.../logger_vendor_spdlog.hpp: 'args#0' is not a constant expression`. spdlog 1.9 / fmt 8 enforce compile-time format-string checking under C++20, which xmBase's (formerly xmSigma) runtime-format wrapper violates.
+- **Correction:** Keep the whole project on C++17. Do not raise `CMAKE_CXX_STANDARD` while depending on `xmotion::xmBase`.
+- **Context:** CMake, xmBase + spdlog/fmt, C++ standard selection.
 
 ### Link quickviz `viewer`, not the `quickviz` aggregate
 - **Pattern:** Linking the `quickviz` INTERFACE target pulls in the `scene` module, whose `scene_app.cpp` unconditionally calls Yoga flex methods that only exist under `ENABLE_AUTO_LAYOUT` (C++20). With auto-layout OFF (needed for C++17) the scene module fails to compile.

@@ -7,6 +7,6 @@ target_include_directories(xmcam_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
 
 # core uses XLOG (scope_timer.hpp) -> PUBLIC link so consumers get the headers.
-target_link_libraries(xmcam_core PUBLIC xmotion::xmSigma Threads::Threads)
+target_link_libraries(xmcam_core PUBLIC xmotion::xmBase Threads::Threads)
 
 add_library(xmcam::core ALIAS xmcam_core)

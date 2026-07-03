@@ -5,7 +5,7 @@ Tracks WHAT, not HOW. Status: `[ ]` todo · `[~]` in progress · `[x]` done. See
 **Status (2026-07-02):** Phases 0–5 implemented; CI green. Hardware-verified: YUYV raw capture, MJPEG→I420 decode, 20-control introspection + INACTIVE-flag dependency, live RTP/H264-over-UDP, GUI live preview @~74fps with GPU YUV→RGB (upload ~0.25ms). Phase 5 RTSP re-export verified E2E (independent client consumed the re-exported camera stream). Remaining (optional): GstGL zero-copy uploader.
 
 ## Phase 0 — Skeleton
-- [x] Git repo + submodules: quickviz `68b79c4`, xmSigma `d65e418`, googletest `973323e` under `third_party/`
+- [x] Git repo + submodules: quickviz `68b79c4`, xmBase `30d7606` (renamed from xmSigma, was `d65e418`), googletest `973323e` under `third_party/`
 - [x] CMake project: C++17, `namespace xmotion`, `add_subdirectory` submodules (find_package fallback), find GStreamer / yaml-cpp; assert OpenCV is NOT linked
 - [x] `.clang-format` (Google, SortIncludes: Never), GoogleTest wiring via submodule
 - [x] `core/` value types: `PixelFormat`, `VideoFrame`, `SourceDescriptor`, `SourceCaps`, `SourceStats`, `Result` (+ unit tests)

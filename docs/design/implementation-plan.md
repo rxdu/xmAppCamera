@@ -17,7 +17,7 @@ Legend: **[T]** unit-tested (gtest), **[H]** verified on the real camera, **[M]*
   - `core/util/scope_timer.hpp` — RAII stage timer (`{ ScopeTimer t("decode"); ... }` → TRACE µs).
   - `core/util/rate_counter.hpp` — EWMA fps / drop counter feeding `SourceStats` and the StatsPanel.
   - Glass-to-glass latency = present-time − frame PTS, reported per second.
-  - **In-app LogPanel**: a ring-buffer spdlog sink (xmSigma is spdlog-backed) rendered in an ImGui panel, so bottlenecks are visible without a terminal.
+  - **In-app LogPanel**: a ring-buffer spdlog sink (xmBase is spdlog-backed) rendered in an ImGui panel, so bottlenecks are visible without a terminal.
 - **Error handling**: `core/result.hpp` (`Status`/`Result<T>` with `{code,message}`); no exceptions across thread boundaries.
 - **Threading**: one producer thread per active `VideoSource`; render thread owns all GL; control writes marshalled to the capture thread via an SPSC command queue.
 - **Definition of done per block**: builds, `clang-format` clean, tests green, `XLOG` at boundaries, committed.
@@ -27,7 +27,7 @@ Legend: **[T]** unit-tested (gtest), **[H]** verified on the real camera, **[M]*
 ## Phase 0 — Skeleton & foundations
 *Goal: a compiling, launching, logging app shell with tested core types.*
 
-- **0.1 Build system** — root `CMakeLists.txt`: C++17, `add_subdirectory(third_party/{xmSigma,quickviz,googletest})` with `find_package` fallback; `pkg-config` GStreamer (`gstreamer-1.0 app video`) + yaml-cpp; option `XMCAM_WITH_GSTREAMER=ON`; **assert OpenCV is not linked** (guard target). Export `compile_commands.json`.
+- **0.1 Build system** — root `CMakeLists.txt`: C++17, `add_subdirectory(third_party/{xmBase,quickviz,googletest})` with `find_package` fallback; `pkg-config` GStreamer (`gstreamer-1.0 app video`) + yaml-cpp; option `XMCAM_WITH_GSTREAMER=ON`; **assert OpenCV is not linked** (guard target). Export `compile_commands.json`.
 - **0.2 Style/tooling** — `.clang-format` (Google, `SortIncludes: Never`), `ctest` wiring.
 - **0.3 `core/` value types + tests [T]**:
   - `pixel_format.hpp` — `enum PixelFormat` + `BytesPerPixel/IsPlanar/ToGl()/FromV4l2Fourcc()/FromGstFormat()/to_string`.

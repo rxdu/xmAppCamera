@@ -9,7 +9,7 @@
 
 #include "xmcam/core/util/scope_timer.hpp"
 #include "xmcam/pipeline/gst_util.hpp"
-#include "xmsigma/logging/xlogger.hpp"
+#include "xmbase/logging/xlogger.hpp"
 
 namespace xmotion {
 

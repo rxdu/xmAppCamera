@@ -11,7 +11,7 @@
 #include "imgui.h"
 
 #include "xmcam/ui/widgets.hpp"
-#include "xmsigma/logging/xlogger.hpp"
+#include "xmbase/logging/xlogger.hpp"
 
 namespace xmotion {
 namespace {

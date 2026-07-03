@@ -22,7 +22,7 @@
 
 #include "xmcam/core/pixel_format.hpp"
 #include "xmcam/pipeline/v4l2_device.hpp"
-#include "xmsigma/logging/xlogger.hpp"
+#include "xmbase/logging/xlogger.hpp"
 
 namespace xmotion {
 namespace {

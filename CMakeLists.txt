@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 project(xmAppCamera VERSION 0.1.0 LANGUAGES C CXX)
 
-# C++17: xmSigma's spdlog logging wrapper is incompatible with C++20's
+# C++17: xmBase's spdlog logging wrapper is incompatible with C++20's
 # compile-time fmt format checking. We only use quickviz's `viewer` module
 # (not `scene`), so we don't need Yoga/C++20.
 set(CMAKE_CXX_STANDARD 17)
@@ -28,11 +28,11 @@ endif()
 find_package(Threads REQUIRED)
 find_package(PkgConfig REQUIRED)
 
-# --- xmSigma (logging) : submodule with find_package fallback ------------------
-if(NOT TARGET xmotion::xmSigma)
-  find_package(xmSigma QUIET)
-  if(NOT xmSigma_FOUND)
-    add_subdirectory(third_party/xmSigma EXCLUDE_FROM_ALL)
+# --- xmBase (logging) : submodule with find_package fallback ------------------
+if(NOT TARGET xmotion::xmBase)
+  find_package(xmBase QUIET)
+  if(NOT xmBase_FOUND)
+    add_subdirectory(third_party/xmBase EXCLUDE_FROM_ALL)
   endif()
 endif()
 

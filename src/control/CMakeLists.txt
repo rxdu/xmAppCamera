@@ -7,7 +7,7 @@ add_library(xmcam_control
 target_include_directories(xmcam_control PUBLIC
   $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
 
-# V4l2Device lives in xmcam_pipeline; that also transitively brings xmSigma
+# V4l2Device lives in xmcam_pipeline; that also transitively brings xmBase
 # (logging) and the core Status types.
 target_link_libraries(xmcam_control PUBLIC xmcam_pipeline)
 

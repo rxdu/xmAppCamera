@@ -16,7 +16,7 @@
 #include "xmcam/qualify/qual_checks.hpp"
 #include "xmcam/ui/widgets.hpp"
 #include "xmcam/qualify/qual_report.hpp"
-#include "xmsigma/logging/xlogger.hpp"
+#include "xmbase/logging/xlogger.hpp"
 
 namespace xmotion {
 namespace {

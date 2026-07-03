@@ -13,7 +13,7 @@
 
 #include "xmcam/app/app_controller.hpp"
 #include "xmcam/ui/main_docking_panel.hpp"
-#include "xmsigma/logging/xlogger.hpp"
+#include "xmbase/logging/xlogger.hpp"
 
 int main() {
   using namespace quickviz;

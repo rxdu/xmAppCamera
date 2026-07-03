@@ -35,12 +35,12 @@ Design the tee/sink seam in v1; implement in-process gst-rtsp-server encoding la
 - **Why:** it is a nice-to-have; keep v1 scope tight while guaranteeing the architecture won't need surgery to add it.
 
 ### D7 — Family conventions
-C++17, `namespace xmotion` (include prefix `xmcam`), Google clang-format, GoogleTest, yaml-cpp for config, xmSigma `XLOG` logging, quickviz for windowing/rendering. Layered so `core/`+`pipeline/`+`control/`+`export/` are testable without a window.
+C++17, `namespace xmotion` (include prefix `xmcam`), Google clang-format, GoogleTest, yaml-cpp for config, xmBase (then xmSigma) `XLOG` logging, quickviz for windowing/rendering. Layered so `core/`+`pipeline/`+`control/`+`export/` are testable without a window.
 
 ### D8 — Family C++ deps as pinned git submodules
-quickviz, xmSigma, and googletest live under `third_party/` as git submodules (pinned commits), consumed via `add_subdirectory` with a `find_package` fallback (xmotion umbrella convention). GStreamer and yaml-cpp are system packages.
+quickviz, xmBase (then xmSigma), and googletest live under `third_party/` as git submodules (pinned commits), consumed via `add_subdirectory` with a `find_package` fallback (xmotion umbrella convention). GStreamer and yaml-cpp are system packages.
 - **Why:** reproducible known-good combination per the family pattern; xmAppCamera is its own repo.
-- **Pinned:** quickviz `68b79c4`, xmSigma `d65e418`, googletest `973323e`.
+- **Pinned:** quickviz `68b79c4`, xmSigma `d65e418` (repo since renamed to xmBase, re-pinned `30d7606`), googletest `973323e`.
 
 ### D9 — GStreamer required from Phase 1 (MJPEG is the camera's primary format)
 The test camera's usable modes are MJPEG-only (raw YUYV is throttled to 5 fps at full resolution), so JPEG decode is needed for a usable preview — not an edge case. USB MJPEG decodes through GStreamer (`appsrc ! jpegdec ! appsink`), the same framework used for network streams, rather than adding a second decoder (libjpeg-turbo).

@@ -111,3 +111,38 @@ endif()
 
 message(STATUS "== xmAppCamera: GUI=${XMCAM_BUILD_GUI} "
                "GStreamer=${XMCAM_WITH_GSTREAMER} Tests=${XMCAM_BUILD_TESTS} ==")
+
+# ---------------------------------------------------------------------------
+# Packaging (Debian). The EXCLUDE_FROM_ALL submodules contribute no install
+# rules, so the package contains exactly our installed files.
+#   cmake --build build && cpack --config build/CPackConfig.cmake  (or
+#   `cpack -G DEB` inside the build dir)
+# ---------------------------------------------------------------------------
+if(PROJECT_IS_TOP_LEVEL AND XMCAM_BUILD_GUI)
+  set(CPACK_GENERATOR "DEB")
+  set(CPACK_PACKAGE_NAME "xmappcamera")
+  set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+  set(CPACK_PACKAGE_CONTACT "rxdu <ruixiang.du@gmail.com>")
+  set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
+      "Camera preview, tuning, qualification and recording tool")
+  set(CPACK_PACKAGE_DESCRIPTION
+"GUI tool for USB (V4L2) cameras and RTSP/UDP network streams:
+live tiled preview, full camera-control tuning, production-readiness
+checks, RTSP re-export and synchronized multi-camera recording.")
+  set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/rxdu/xmAppCamera")
+  set(CPACK_DEBIAN_PACKAGE_SECTION "video")
+  set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)  # xmappcamera_<ver>_<arch>.deb
+  set(CPACK_STRIP_FILES ON)
+
+  # Linked libraries: computed exactly by dpkg-shlibdeps for the build
+  # distro (libglfw3, libgstreamer*, libyaml-cpp*, libspdlog*, ...).
+  set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+  # GStreamer PLUGINS are dlopen'ed, invisible to shlibdeps, and required at
+  # runtime: base (videoconvert/videotestsrc), good (jpegdec/rtp/matroska),
+  # bad (h264parse/rtsp bits), ugly (x264enc), libav (avdec_h264/ffv1).
+  set(CPACK_DEBIAN_PACKAGE_DEPENDS
+      "gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, \
+gstreamer1.0-plugins-bad, gstreamer1.0-plugins-ugly, gstreamer1.0-libav")
+
+  include(CPack)
+endif()

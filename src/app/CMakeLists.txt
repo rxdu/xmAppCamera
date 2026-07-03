@@ -7,4 +7,8 @@ add_library(xmcam::app ALIAS xmcam_app_lib)
 if(XMCAM_BUILD_GUI)
   add_executable(xmAppCamera main.cpp)
   target_link_libraries(xmAppCamera PRIVATE xmcam_app_lib xmcam_ui viewer)
+
+  install(TARGETS xmAppCamera RUNTIME DESTINATION bin)
+  install(FILES ${CMAKE_SOURCE_DIR}/packaging/xmappcamera.desktop
+          DESTINATION share/applications)
 endif()

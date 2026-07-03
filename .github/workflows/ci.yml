@@ -43,6 +43,17 @@ jobs:
         working-directory: build
         run: ctest --output-on-failure
 
+      - name: Package (deb)
+        run: |
+          cd build && cpack -G DEB
+          dpkg-deb --info xmappcamera_*_amd64.deb
+      - name: Upload deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xmappcamera-deb
+          path: build/xmappcamera_*_amd64.deb
+          retention-days: 14
+
       - name: Verify OpenCV is not linked into the app
         run: |
           if ldd build/bin/xmAppCamera 2>/dev/null | grep -i opencv; then

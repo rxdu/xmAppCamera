@@ -1,57 +1,59 @@
 # xmAppCamera
 
-A lightweight, low-latency desktop GUI to **preview and fine-tune camera sources** in the xmotion family:
+A lightweight, low-latency desktop app to **preview, tune, and record camera sources** — USB cameras and RTSP/UDP network streams — built on the xmotion family (quickviz + xmBase). Frames stay in their native format end-to-end (no OpenCV), with GPU color conversion, for raw performance and a small footprint.
 
-- **USB / V4L2 cameras** — reliable device enumeration, full control introspection (every control the camera exposes), live tuning, and export to a re-loadable config file.
-- **RTSP / UDP streams** — compose GStreamer pipelines (guided builder + raw override) to decode network video.
-- **RTSP re-export** *(nice-to-have)* — publish any active source as an RTSP stream.
+![xmAppCamera](docs/images/app-screenshot.png)
 
-Built on **quickviz** (windowing, ImGui docking, GL texture streaming) and **xmBase** (logging). Frames stay native (no OpenCV / `cv::Mat`) for raw performance and a small footprint.
+## Features
 
-## Status
-Backend implemented and hardware-verified; GUI implemented and CI-green (build + tests). Ready for manual testing.
+- **Multi-camera preview** — run several USB cameras and network streams side by side in a tiled, resizable view, with a per-source stats overlay (capture/display fps, drops, decode/upload/latency).
+- **Full camera control** — every V4L2 control the camera exposes (exposure, gain, white balance, …) with live tuning, auto/manual dependency handling, and reset to defaults.
+- **Config export & reload** — save a camera's format and control state to a YAML file and restore it later, for repeatable deployments.
+- **Network streams** — RTSP/UDP sources via a guided pipeline builder or a raw GStreamer pipeline, with automatic reconnect and clear error reporting.
+- **Recording** — per-source or synchronized multi-source recording with a shared time base and manifest:
+  - **H.264** (default) — compact, universally playable
+  - **Passthrough** — the camera's original MJPEG/H.264 bitstream, zero re-encode
+  - **FFV1** — lossless
+  - **Y4M** — raw frames
+- **RTSP re-export** — publish any live source as an RTSP stream (selectable interface, port, and path).
+- **Device checks** — built-in qualification suite: exposure/gain lock, AWB disable, disconnect recovery, timestamp sanity, soak test, and more.
+- **Robust device handling** — stable identities across reboots and re-plugs (`/dev/v4l/by-path` / `by-id`), hot-plug recovery while streaming.
 
-## Build & run
+## Install
+
+Grab the `.deb` from the latest CI artifacts, or build it yourself (see below), then:
 
 ```bash
-# one-time deps (Ubuntu)
+sudo apt install ./xmappcamera_*.deb
+```
+
+## Build from source
+
+```bash
+# dependencies (Ubuntu)
 sudo apt install -y build-essential cmake pkg-config \
   libgl1-mesa-dev libglu1-mesa-dev libglfw3-dev libglm-dev libcairo2-dev \
   libfontconfig1-dev libeigen3-dev libspdlog-dev libfmt-dev libyaml-cpp-dev \
-  libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-  gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav
+  libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstrtspserver-1.0-dev \
+  gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
+  gstreamer1.0-plugins-ugly gstreamer1.0-libav
 
-git clone --recursive git@github.com:rxdu/xmAppCamera.git
+git clone --recursive https://github.com/rxdu/xmAppCamera.git
 cd xmAppCamera
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build -j"$(nproc)"
-ctest --test-dir build --output-on-failure   # unit tests (camera/network ones skip if absent)
 
-./build/bin/xmAppCamera                        # the GUI
+./build/bin/xmAppCamera
 ```
 
-### Install as a package
+To package: `cd build && cpack -G DEB`.
 
-```bash
-cd build && cpack -G DEB
-cp xmappcamera_*.deb /tmp/ && sudo apt install /tmp/xmappcamera_*.deb
-```
+## Documentation
 
-`apt install` (not `dpkg -i`) resolves the runtime dependencies, including the
-GStreamer plugin packages. Installing via `/tmp` avoids apt's harmless
-"Download is performed unsandboxed" notice (the `_apt` sandbox user cannot
-read files inside home directories). CI also uploads a ready-made `.deb`
-artifact on every run.
+- [docs/DESIGN.md](docs/DESIGN.md) — architecture, frame path, threading model.
+- [docs/adr/](docs/adr/) — key design decisions and rationale.
+- [docs/design/config-schema.md](docs/design/config-schema.md) — exported config format.
 
-Headless smoke tools (no GUI): `build/bin/xmcam_v4l2_smoke [dev] [yuyv|mjpeg] [WxH] [fps] [n]`,
-`build/bin/xmcam_gst_smoke "<pipeline>" [n]`. Local RTP/UDP test stream: `scripts/test/udp_h264_stream.sh start`.
+---
 
-## Design docs
-
-- **[docs/DESIGN.md](docs/DESIGN.md)** — architecture, frame path, threading, modules, phases.
-- **[docs/adr/0001-architecture-and-stack.md](docs/adr/0001-architecture-and-stack.md)** — the key decisions and why.
-- **[docs/design/config-schema.md](docs/design/config-schema.md)** — exported config format.
-- **[TODO.md](TODO.md)** — phased work breakdown.
-
-## Dependencies (planned)
-quickviz · xmBase · GStreamer 1.x (`gstreamer-1.0 app video`, + `rtsp-server` in phase 2) · libv4l2 / linux uapi · yaml-cpp. **No OpenCV.** C++17.
+Copyright (c) 2026 Ruixiang Du (rdu)
